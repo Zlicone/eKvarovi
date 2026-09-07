@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="eKvarovi.Api/eKvarovi.Api.csproj" />
+  <Project Path="eKvarovi.App/eKvarovi.App.csproj" />
+  <Project Path="eKvarovi.Shared/eKvarovi.Shared.csproj" />
+</Solution>
