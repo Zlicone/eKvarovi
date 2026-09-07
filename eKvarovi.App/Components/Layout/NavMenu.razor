@@ -1,18 +1,28 @@
-﻿<div class="top-row ps-3 navbar navbar-dark">
-    <div class="container-fluid">
-        <a class="navbar-brand" href="">eKvarovi.App</a>
-    </div>
-</div>
+﻿<MudNavMenu>
+    <MudNavLink Href="/" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Dashboard">
+        Početna
+    </MudNavLink>
 
-<input type="checkbox" title="Navigation menu" class="navbar-toggler" />
+    <MudNavGroup Title="Operativa" Icon="@Icons.Material.Filled.Build" Expanded="true">
+        <MudNavLink Href="/faultreports" Icon="@Icons.Material.Filled.ReportProblem">Prijave kvarova</MudNavLink>
+        <MudNavLink Href="/assignments" Icon="@Icons.Material.Filled.AssignmentInd">Radni nalozi</MudNavLink>
+        <MudNavLink Href="/interventions" Icon="@Icons.Material.Filled.Handyman">Intervencije</MudNavLink>
+    </MudNavGroup>
 
-<div class="nav-scrollable" onclick="document.querySelector('.navbar-toggler').click()">
-    <nav class="nav flex-column">
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
-                <span class="bi bi-house-door-fill-nav-menu" aria-hidden="true"></span> Home
-            </NavLink>
-        </div>
-    </nav>
-</div>
+    <MudNavGroup Title="Moje" Icon="@Icons.Material.Filled.Person" Expanded="true">
+        <MudNavLink Href="/myreports" Icon="@Icons.Material.Filled.Description">Moje prijave</MudNavLink>
+        <MudNavLink Href="/myassignments" Icon="@Icons.Material.Filled.Assignment">Moji nalozi</MudNavLink>
+    </MudNavGroup>
 
+    <MudNavGroup Title="Šifrarnici" Icon="@Icons.Material.Filled.Folder">
+        <MudNavLink Href="/locations" Icon="@Icons.Material.Filled.LocationOn">Lokacije</MudNavLink>
+        <MudNavLink Href="/employees" Icon="@Icons.Material.Filled.Badge">Zaposlenici</MudNavLink>
+        <MudNavLink Href="/materials" Icon="@Icons.Material.Filled.Inventory">Materijali</MudNavLink>
+    </MudNavGroup>
+
+    <MudNavGroup Title="Administracija" Icon="@Icons.Material.Filled.AdminPanelSettings">
+        <MudNavLink Href="/users" Icon="@Icons.Material.Filled.ManageAccounts">Korisnici</MudNavLink>
+    </MudNavGroup>
+
+    <MudNavLink Href="/login" Icon="@Icons.Material.Filled.Login">Prijava</MudNavLink>
+</MudNavMenu>
