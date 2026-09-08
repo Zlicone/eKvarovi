@@ -10,6 +10,7 @@
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
 @inject NavigationManager Nav
+@inject AssignmentService AssignmentService
 
 <PageTitle>Prijave kvarova</PageTitle>
 
@@ -156,6 +157,10 @@
                 <MudIconButton Icon="@Icons.Material.Filled.FactCheck" Size="Size.Small"
                                Color="Color.Info"
                                OnClick="@(() => OpenReview(context))" />
+                <MudIconButton Icon="@Icons.Material.Filled.AssignmentInd" Size="Size.Small"
+                               Color="Color.Primary"
+                               Title="Dodijeli izvršitelja"
+                               OnClick="@(() => OpenAssign(context))" />
                 <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small"
                                Color="Color.Error"
                                OnClick="@(() => ConfirmDelete(context))" />
@@ -195,6 +200,31 @@
         _employees = await EmployeeService.GetAllAsync(isActive: true);
 
         await LoadData();
+    }
+
+    private async Task OpenAssign(FaultReportListDto item)
+    {
+        var parameters = new DialogParameters<AssignDialog>
+    {
+        { x => x.FaultReportId, item.Id },
+        { x => x.CurrentTechnicianName, item.ActiveTechnicianName },
+        { x => x.Technicians, _employees }
+    };
+
+        var title = item.ActiveTechnicianName is null
+            ? $"Dodjela naloga: {item.Title}"
+            : $"Prebacivanje naloga: {item.Title}";
+
+        var dialog = await DialogService.ShowAsync<AssignDialog>(title, parameters);
+        var result = await dialog.Result;
+
+        if (result is not null && !result.Canceled)
+        {
+            Snackbar.Add(item.ActiveTechnicianName is null
+                ? "Nalog je dodijeljen."
+                : "Nalog je prebačen na novog izvršitelja.", Severity.Success);
+            await LoadData();
+        }
     }
 
     private async Task LoadData()

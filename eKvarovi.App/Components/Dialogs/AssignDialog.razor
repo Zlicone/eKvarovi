@@ -1,0 +1,85 @@
+﻿@using eKvarovi.Shared.Dtos
+@using eKvarovi.App.Services
+@inject AssignmentService AssignmentService
+
+<MudDialog>
+    <DialogContent>
+        @if (CurrentTechnicianName is not null)
+        {
+            <MudAlert Severity="Severity.Info" Dense="true" Class="mb-3">
+                Nalog trenutno drži @CurrentTechnicianName. Odabirom drugog izvršitelja
+                postojeći nalog se zatvara, a povijest ostaje sačuvana.
+            </MudAlert>
+        }
+
+        <MudForm @ref="_form" Model="_model">
+            <MudSelect T="int" @bind-Value="_model.TechnicianId"
+                       Label="Izvršitelj *"
+                       Validation="@(new Func<int, string?>(v => v <= 0 ? "Izvršitelj je obavezan." : null))"
+                       Class="mb-3">
+                @foreach (var emp in Technicians)
+                {
+                    <MudSelectItem T="int" Value="@emp.Id">
+                        @emp.FullName — @emp.LocationName (@emp.ActiveAssignmentCount aktivnih)
+                    </MudSelectItem>
+                }
+            </MudSelect>
+
+            <MudTextField @bind-Value="_model.Note"
+                          Label="Napomena izvršitelju"
+                          Lines="3"
+                          MaxLength="500" />
+        </MudForm>
+
+        @if (!string.IsNullOrWhiteSpace(_error))
+        {
+            <MudAlert Severity="Severity.Error" Class="mt-3">@_error</MudAlert>
+        }
+    </DialogContent>
+
+    <DialogActions>
+        <MudButton OnClick="Cancel">Odustani</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Save" Disabled="_saving">
+            @(_saving ? "Spremanje..." : (CurrentTechnicianName is null ? "Dodijeli" : "Prebaci nalog"))
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter] public int FaultReportId { get; set; }
+    [Parameter] public string? CurrentTechnicianName { get; set; }
+    [Parameter] public List<EmployeeDto> Technicians { get; set; } = new();
+
+    private MudForm _form = default!;
+    private AssignmentCreateDto _model = new();
+    private bool _saving;
+    private string? _error;
+
+    protected override void OnInitialized()
+    {
+        _model.FaultReportId = FaultReportId;
+    }
+
+    private async Task Save()
+    {
+        await _form.Validate();
+        if (!_form.IsValid) return;
+
+        _saving = true;
+        _error = null;
+
+        var result = await AssignmentService.CreateAsync(_model);
+
+        _saving = false;
+
+        if (result.Success)
+            MudDialog.Close(DialogResult.Ok(true));
+        else
+            _error = result.Error;
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}

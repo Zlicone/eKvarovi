@@ -1,5 +1,195 @@
-﻿<h3>Assignments</h3>
+﻿@page "/assignments"
+@rendermode InteractiveServer
+@using eKvarovi.Shared.Dtos
+@using eKvarovi.App.Services
+@using eKvarovi.App.Components.Dialogs
+@inject AssignmentService AssignmentService
+@inject EmployeeService EmployeeService
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@inject NavigationManager Nav
+
+<PageTitle>Radni nalozi</PageTitle>
+
+<MudText Typo="Typo.h4" Class="mb-4">Radni nalozi</MudText>
+
+<MudPaper Class="pa-4 mb-4">
+    <MudGrid>
+        <MudItem xs="12" md="5">
+            <MudTextField @bind-Value="_search"
+                          Label="Pretraga"
+                          Placeholder="Naslov prijave ili ime izvršitelja"
+                          Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Filled.Search"
+                          Immediate="true"
+                          DebounceInterval="400"
+                          OnDebounceIntervalElapsed="LoadData" />
+        </MudItem>
+
+        <MudItem xs="12" md="4">
+            <MudSelect T="int?" Value="_technicianId"
+                       ValueChanged="@(async v => { _technicianId = v; await LoadData(); })"
+                       Label="Izvršitelj" Clearable="true">
+                @foreach (var emp in _employees)
+                {
+                    <MudSelectItem T="int?" Value="@((int?)emp.Id)">@emp.FullName</MudSelectItem>
+                }
+            </MudSelect>
+        </MudItem>
+
+        <MudItem xs="12" md="3" Class="d-flex align-center gap-2">
+            <MudCheckBox T="bool" Value="_activeOnly"
+                         ValueChanged="@(async v => { _activeOnly = v; await LoadData(); })"
+                         Label="Samo aktivni" Color="Color.Primary" />
+
+            <MudIconButton Icon="@Icons.Material.Filled.Refresh"
+                           Color="Color.Default"
+                           OnClick="ResetFilters" />
+        </MudItem>
+    </MudGrid>
+</MudPaper>
+
+<MudPaper Class="pa-4">
+    <MudText Typo="Typo.h6" Class="mb-3">Pronađeno: @_items.Count</MudText>
+
+    <MudTable Items="_items" Loading="_loading" Hover="true" Striped="true" Dense="true"
+              Breakpoint="Breakpoint.Sm"
+              NoRecordsText="Nema radnih naloga koji odgovaraju filterima.">
+        <HeaderContent>
+            <MudTh>Prijava</MudTh>
+            <MudTh>Lokacija</MudTh>
+            <MudTh>Prioritet</MudTh>
+            <MudTh>Izvršitelj</MudTh>
+            <MudTh>Dodijeljeno</MudTh>
+            <MudTh>Skinuto</MudTh>
+            <MudTh>Intervencije</MudTh>
+            <MudTh>Stanje</MudTh>
+            <MudTh>Akcije</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Prijava">
+                <MudLink Href="@($"/faultreports/{context.FaultReportId}")">
+                    @context.FaultReportTitle
+                </MudLink>
+            </MudTd>
+            <MudTd DataLabel="Lokacija">@context.LocationName</MudTd>
+            <MudTd DataLabel="Prioritet">
+                @if (context.PriorityName is null)
+                {
+                    <span>—</span>
+                }
+                else
+                {
+                    <MudChip T="string" Size="Size.Small" Color="@PriorityColor(context.PriorityRank)">
+                        @context.PriorityName
+                    </MudChip>
+                }
+            </MudTd>
+            <MudTd DataLabel="Izvršitelj">@context.TechnicianName</MudTd>
+            <MudTd DataLabel="Dodijeljeno">@context.AssignedAt.ToLocalTime().ToString("dd.MM.yyyy. HH:mm")</MudTd>
+            <MudTd DataLabel="Skinuto">
+                @(context.UnassignedAt is null
+                    ? "—"
+                    : context.UnassignedAt.Value.ToLocalTime().ToString("dd.MM.yyyy. HH:mm"))
+            </MudTd>
+            <MudTd DataLabel="Intervencije">
+                @context.InterventionCount
+                @if (context.HasCompletedIntervention)
+                {
+                    <MudIcon Icon="@Icons.Material.Filled.CheckCircle"
+                             Color="Color.Success" Size="Size.Small" Class="ml-1" />
+                }
+            </MudTd>
+            <MudTd DataLabel="Stanje">
+                <MudChip T="string" Size="Size.Small"
+                         Color="@(context.IsActive ? Color.Success : Color.Default)">
+                    @(context.IsActive ? "Aktivan" : "Zatvoren")
+                </MudChip>
+            </MudTd>
+            <MudTd DataLabel="Akcije">
+                @if (context.IsActive)
+                {
+                    <MudIconButton Icon="@Icons.Material.Filled.PersonRemove"
+                                   Size="Size.Small" Color="Color.Warning"
+                                   Title="Skini nalog"
+                                   OnClick="@(() => ConfirmUnassign(context))" />
+                }
+                <MudIconButton Icon="@Icons.Material.Filled.OpenInNew"
+                               Size="Size.Small" Color="Color.Default"
+                               Title="Otvori prijavu"
+                               OnClick="@(() => Nav.NavigateTo($"/faultreports/{context.FaultReportId}"))" />
+            </MudTd>
+        </RowTemplate>
+        <PagerContent>
+            <MudTablePager RowsPerPageString="Redova po stranici:" />
+        </PagerContent>
+    </MudTable>
+</MudPaper>
 
 @code {
+    private List<AssignmentDto> _items = new();
+    private List<EmployeeDto> _employees = new();
 
+    private string? _search;
+    private int? _technicianId;
+    private bool _activeOnly = true;
+    private bool _loading;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _employees = await EmployeeService.GetAllAsync(isActive: true);
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        _loading = true;
+        _items = await AssignmentService.GetAllAsync(
+            technicianId: _technicianId,
+            activeOnly: _activeOnly ? true : null,
+            search: _search);
+        _loading = false;
+    }
+
+    private async Task ResetFilters()
+    {
+        _search = null;
+        _technicianId = null;
+        _activeOnly = true;
+        await LoadData();
+    }
+
+    private static Color PriorityColor(int? rank) => rank switch
+    {
+        4 => Color.Error,
+        3 => Color.Warning,
+        2 => Color.Info,
+        _ => Color.Default
+    };
+
+    private async Task ConfirmUnassign(AssignmentDto item)
+    {
+        var parameters = new DialogParameters<ConfirmDialog>
+        {
+            { x => x.Message, $"Skinuti nalog s izvršitelja {item.TechnicianName}? Prijava se vraća među nedodijeljene, a nalog ostaje u povijesti." },
+            { x => x.ConfirmText, "Skini nalog" }
+        };
+
+        var dialog = await DialogService.ShowAsync<ConfirmDialog>("Potvrda", parameters);
+        var result = await dialog.Result;
+
+        if (result is null || result.Canceled) return;
+
+        var (success, error) = await AssignmentService.UnassignAsync(item.Id);
+
+        if (success)
+        {
+            Snackbar.Add("Nalog je skinut.", Severity.Success);
+            await LoadData();
+        }
+        else
+        {
+            Snackbar.Add(error ?? "Skidanje nije uspjelo.", Severity.Error);
+        }
+    }
 }

@@ -3,6 +3,7 @@ using eKvarovi.Api.Models;
 using eKvarovi.Shared.Dtos;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Linq.Expressions;
 
 namespace eKvarovi.Api.Controllers;
 
@@ -47,7 +48,7 @@ public class AssignmentsController : ControllerBase
         var items = await query
             .OrderByDescending(a => a.UnassignedAt == null)
             .ThenByDescending(a => a.AssignedAt)
-            .Select(a => MapToDto(a))
+            .Select(ToDto)
             .ToListAsync();
 
         return Ok(items);
@@ -58,7 +59,7 @@ public class AssignmentsController : ControllerBase
     {
         var item = await _db.FaultAssignments
             .Where(a => a.Id == id)
-            .Select(a => MapToDto(a))
+            .Select(ToDto)
             .FirstOrDefaultAsync();
 
         if (item is null)
@@ -186,7 +187,8 @@ public class AssignmentsController : ControllerBase
         return NoContent();
     }
 
-    private static AssignmentDto MapToDto(FaultAssignment a) => new()
+    private static readonly Expression<Func<FaultAssignment, AssignmentDto>> ToDto =
+    a => new AssignmentDto
     {
         Id = a.Id,
         FaultReportId = a.FaultReportId,
