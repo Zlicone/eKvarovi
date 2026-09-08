@@ -1,0 +1,132 @@
+﻿@using eKvarovi.Shared.Dtos
+@using eKvarovi.App.Services
+@inject LocationService LocationService
+
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="_form" Model="_model">
+            <MudTextField @bind-Value="_model.Name"
+                          Label="Naziv lokacije"
+                          Required="true"
+                          RequiredError="Naziv je obavezan."
+                          MaxLength="150"
+                          Class="mb-3" />
+
+            <MudTextField @bind-Value="_model.Address"
+                          Label="Adresa"
+                          Required="true"
+                          RequiredError="Adresa je obavezna."
+                          MaxLength="200"
+                          Class="mb-3" />
+
+            <MudTextField @bind-Value="_model.City"
+                          Label="Grad"
+                          Required="true"
+                          RequiredError="Grad je obavezan."
+                          MaxLength="100"
+                          Class="mb-3" />
+
+            <MudSelect T="int" @bind-Value="_model.LocationTypeId"
+                       Label="Vrsta lokacije"
+                       Required="true"
+                       RequiredError="Vrsta lokacije je obavezna."
+                       Class="mb-3">
+                @foreach (var type in LocationTypes)
+                {
+                    <MudSelectItem T="int" Value="@type.Id">@type.Name</MudSelectItem>
+                }
+            </MudSelect>
+
+            @if (IsEdit)
+            {
+                <MudSwitch T="bool" @bind-Value="_isActive"
+                           Label="Lokacija je aktivna"
+                           Color="Color.Primary" />
+            }
+        </MudForm>
+
+        @if (!string.IsNullOrWhiteSpace(_error))
+        {
+            <MudAlert Severity="Severity.Error" Class="mt-3">@_error</MudAlert>
+        }
+    </DialogContent>
+
+    <DialogActions>
+        <MudButton OnClick="Cancel">Odustani</MudButton>
+        <MudButton Color="Color.Primary"
+                   Variant="Variant.Filled"
+                   OnClick="Save"
+                   Disabled="_saving">
+            @(_saving ? "Spremanje..." : "Spremi")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter] public LocationDto? Existing { get; set; }
+    [Parameter] public List<LookupDto> LocationTypes { get; set; } = new();
+
+    private MudForm _form = default!;
+    private LocationUpdateDto _model = new();
+    private bool _isActive = true;
+    private bool _saving;
+    private string? _error;
+
+    private bool IsEdit => Existing is not null;
+
+    protected override void OnInitialized()
+    {
+        if (Existing is not null)
+        {
+            _model = new LocationUpdateDto
+            {
+                Name = Existing.Name,
+                Address = Existing.Address,
+                City = Existing.City,
+                LocationTypeId = Existing.LocationTypeId,
+                IsActive = Existing.IsActive
+            };
+            _isActive = Existing.IsActive;
+        }
+    }
+
+    private async Task Save()
+    {
+        await _form.Validate();
+        if (!_form.IsValid) return;
+
+        _saving = true;
+        _error = null;
+
+        (bool Success, string? Error) result;
+
+        if (IsEdit)
+        {
+            _model.IsActive = _isActive;
+            result = await LocationService.UpdateAsync(Existing!.Id, _model);
+        }
+        else
+        {
+            var createDto = new LocationCreateDto
+            {
+                Name = _model.Name,
+                Address = _model.Address,
+                City = _model.City,
+                LocationTypeId = _model.LocationTypeId
+            };
+            result = await LocationService.CreateAsync(createDto);
+        }
+
+        _saving = false;
+
+        if (result.Success)
+            MudDialog.Close(DialogResult.Ok(true));
+        else
+            _error = result.Error;
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}

@@ -1,4 +1,5 @@
 using eKvarovi.App.Components;
+using eKvarovi.App.Services;
 using MudBlazor.Services;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -12,6 +13,9 @@ builder.Services.AddScoped(sp => new HttpClient
 {
     BaseAddress = new Uri(builder.Configuration["ApiBaseUrl"]!)
 });
+
+builder.Services.AddScoped<LookupService>();
+builder.Services.AddScoped<LocationService>();
 
 var app = builder.Build();
 
