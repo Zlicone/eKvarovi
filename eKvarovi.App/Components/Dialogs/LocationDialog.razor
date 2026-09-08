@@ -27,9 +27,8 @@
                           Class="mb-3" />
 
             <MudSelect T="int" @bind-Value="_model.LocationTypeId"
-                       Label="Vrsta lokacije"
-                       Required="true"
-                       RequiredError="Vrsta lokacije je obavezna."
+                       Label="Vrsta lokacije *"
+                       Validation="@(new Func<int, string?>(ValidateLocationType))"
                        Class="mb-3">
                 @foreach (var type in LocationTypes)
                 {
@@ -92,6 +91,9 @@
             _isActive = Existing.IsActive;
         }
     }
+
+    private string? ValidateLocationType(int value)
+        => value <= 0 ? "Vrsta lokacije je obavezna." : null;
 
     private async Task Save()
     {

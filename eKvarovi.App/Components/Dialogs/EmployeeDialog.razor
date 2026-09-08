@@ -1,0 +1,151 @@
+﻿@using eKvarovi.Shared.Dtos
+@using eKvarovi.App.Services
+@inject EmployeeService EmployeeService
+@using System.ComponentModel.DataAnnotations
+
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="_form" Model="_model">
+            <MudGrid>
+                <MudItem xs="12" sm="6">
+                    <MudTextField @bind-Value="_model.FirstName"
+                                  Label="Ime"
+                                  Required="true"
+                                  RequiredError="Ime je obavezno."
+                                  MaxLength="100" />
+                </MudItem>
+
+                <MudItem xs="12" sm="6">
+                    <MudTextField @bind-Value="_model.LastName"
+                                  Label="Prezime"
+                                  Required="true"
+                                  RequiredError="Prezime je obavezno."
+                                  MaxLength="100" />
+                </MudItem>
+
+                <MudItem xs="12">
+                    <MudTextField @bind-Value="_model.Email"
+                                  Label="Email"
+                                  InputType="InputType.Email"
+                                  Required="true"
+                                  RequiredError="Email je obavezan."
+                                  Validation="@(new EmailAddressAttribute { ErrorMessage = "Email nije u ispravnom obliku." })"
+                                  MaxLength="200" />
+                </MudItem>
+
+                <MudItem xs="12" sm="6">
+                    <MudTextField @bind-Value="_model.Phone"
+                                  Label="Telefon"
+                                  MaxLength="50" />
+                </MudItem>
+
+                <MudSelect T="int" @bind-Value="_model.LocationId"
+                           Label="Lokacija"
+                           Validation="@(new Func<int, string?>(ValidateLocation))">
+                    @foreach (var loc in Locations)
+                    {
+                        <MudSelectItem T="int" Value="@loc.Id">@loc.Name</MudSelectItem>
+                    }
+                </MudSelect>
+
+                @if (IsEdit)
+                {
+                    <MudItem xs="12">
+                        <MudSwitch T="bool" @bind-Value="_isActive"
+                                   Label="Zaposlenik je aktivan"
+                                   Color="Color.Primary" />
+                    </MudItem>
+                }
+            </MudGrid>
+        </MudForm>
+
+        @if (!string.IsNullOrWhiteSpace(_error))
+        {
+            <MudAlert Severity="Severity.Error" Class="mt-3">@_error</MudAlert>
+        }
+    </DialogContent>
+
+    <DialogActions>
+        <MudButton OnClick="Cancel">Odustani</MudButton>
+        <MudButton Color="Color.Primary"
+                   Variant="Variant.Filled"
+                   OnClick="Save"
+                   Disabled="_saving">
+            @(_saving ? "Spremanje..." : "Spremi")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter] public EmployeeDto? Existing { get; set; }
+    [Parameter] public List<LocationDto> Locations { get; set; } = new();
+
+    private MudForm _form = default!;
+    private EmployeeUpdateDto _model = new();
+    private bool _isActive = true;
+    private bool _saving;
+    private string? _error;
+
+    private bool IsEdit => Existing is not null;
+
+    private string? ValidateLocation(int value)
+    => value <= 0 ? "Lokacija je obavezna." : null;
+
+    protected override void OnInitialized()
+    {
+        if (Existing is not null)
+        {
+            _model = new EmployeeUpdateDto
+            {
+                FirstName = Existing.FirstName,
+                LastName = Existing.LastName,
+                Email = Existing.Email,
+                Phone = Existing.Phone,
+                LocationId = Existing.LocationId,
+                IsActive = Existing.IsActive
+            };
+            _isActive = Existing.IsActive;
+        }
+    }
+
+    private async Task Save()
+    {
+        await _form.Validate();
+        if (!_form.IsValid) return;
+
+        _saving = true;
+        _error = null;
+
+        (bool Success, string? Error) result;
+
+        if (IsEdit)
+        {
+            _model.IsActive = _isActive;
+            result = await EmployeeService.UpdateAsync(Existing!.Id, _model);
+        }
+        else
+        {
+            var createDto = new EmployeeCreateDto
+            {
+                FirstName = _model.FirstName,
+                LastName = _model.LastName,
+                Email = _model.Email,
+                Phone = _model.Phone,
+                LocationId = _model.LocationId
+            };
+            result = await EmployeeService.CreateAsync(createDto);
+        }
+
+        _saving = false;
+
+        if (result.Success)
+            MudDialog.Close(DialogResult.Ok(true));
+        else
+            _error = result.Error;
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}

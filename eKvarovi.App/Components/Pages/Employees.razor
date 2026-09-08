@@ -1,5 +1,257 @@
-﻿<h3>Employees</h3>
+﻿@page "/employees"
+@rendermode InteractiveServer
+@using eKvarovi.Shared.Dtos
+@using eKvarovi.App.Services
+@using eKvarovi.App.Components.Dialogs
+@inject EmployeeService EmployeeService
+@inject LocationService LocationService
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<PageTitle>Zaposlenici</PageTitle>
+
+<MudText Typo="Typo.h4" Class="mb-4">Zaposlenici</MudText>
+
+<MudPaper Class="pa-4 mb-4">
+    <MudGrid>
+        <MudItem xs="12" md="4">
+            <MudTextField @bind-Value="_search"
+                          Label="Pretraga"
+                          Placeholder="Ime, prezime ili email"
+                          Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Filled.Search"
+                          Immediate="true"
+                          DebounceInterval="400"
+                          OnDebounceIntervalElapsed="LoadData" />
+        </MudItem>
+
+        <MudItem xs="12" md="3">
+            <MudSelect T="int?"
+                       Value="_locationId"
+                       ValueChanged="OnLocationChanged"
+                       Label="Lokacija"
+                       Clearable="true">
+                @foreach (var loc in _allLocations)
+                {
+                    <MudSelectItem T="int?" Value="@((int?)loc.Id)">@loc.Name</MudSelectItem>
+                }
+            </MudSelect>
+        </MudItem>
+
+        <MudItem xs="12" md="3">
+            <MudSelect T="bool?"
+                       Value="_isActive"
+                       ValueChanged="OnActiveChanged"
+                       Label="Status"
+                       Clearable="true">
+                <MudSelectItem T="bool?" Value="@((bool?)true)">Aktivni</MudSelectItem>
+                <MudSelectItem T="bool?" Value="@((bool?)false)">Neaktivni</MudSelectItem>
+            </MudSelect>
+        </MudItem>
+
+        <MudItem xs="12" md="2" Class="d-flex align-center">
+            <MudButton Variant="Variant.Outlined"
+                       StartIcon="@Icons.Material.Filled.Refresh"
+                       OnClick="ResetFilters"
+                       FullWidth="true">
+                Poništi
+            </MudButton>
+        </MudItem>
+    </MudGrid>
+</MudPaper>
+
+<MudPaper Class="pa-4">
+    <div class="d-flex justify-space-between align-center mb-3">
+        <MudText Typo="Typo.h6">Pronađeno: @_items.Count</MudText>
+        <MudButton Variant="Variant.Filled"
+                   Color="Color.Primary"
+                   StartIcon="@Icons.Material.Filled.PersonAdd"
+                   OnClick="OpenCreate">
+            Novi zaposlenik
+        </MudButton>
+    </div>
+
+    <MudTable Items="_items"
+              Loading="_loading"
+              Hover="true"
+              Striped="true"
+              Dense="true"
+              Breakpoint="Breakpoint.Sm"
+              NoRecordsText="Nema zaposlenika koji odgovaraju filterima.">
+        <HeaderContent>
+            <MudTh>Ime i prezime</MudTh>
+            <MudTh>Email</MudTh>
+            <MudTh>Telefon</MudTh>
+            <MudTh>Lokacija</MudTh>
+            <MudTh>Prijave</MudTh>
+            <MudTh>Aktivni nalozi</MudTh>
+            <MudTh>Račun</MudTh>
+            <MudTh>Status</MudTh>
+            <MudTh>Akcije</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Ime i prezime">@context.FullName</MudTd>
+            <MudTd DataLabel="Email">@context.Email</MudTd>
+            <MudTd DataLabel="Telefon">@(string.IsNullOrWhiteSpace(context.Phone) ? "—" : context.Phone)</MudTd>
+            <MudTd DataLabel="Lokacija">@context.LocationName</MudTd>
+            <MudTd DataLabel="Prijave">@context.ReportedCount</MudTd>
+            <MudTd DataLabel="Aktivni nalozi">
+                @if (context.ActiveAssignmentCount > 0)
+                {
+                    <MudChip T="string" Size="Size.Small" Color="Color.Info">
+                        @context.ActiveAssignmentCount
+                    </MudChip>
+                }
+                else
+                {
+                    <span>0</span>
+                }
+            </MudTd>
+            <MudTd DataLabel="Račun">
+                @if (context.HasAccount)
+                {
+                    <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success" Size="Size.Small" />
+                }
+                else
+                {
+                    <MudIcon Icon="@Icons.Material.Filled.RemoveCircleOutline" Color="Color.Default" Size="Size.Small" />
+                }
+            </MudTd>
+            <MudTd DataLabel="Status">
+                <MudChip T="string"
+                         Size="Size.Small"
+                         Color="@(context.IsActive ? Color.Success : Color.Default)">
+                    @(context.IsActive ? "Aktivan" : "Neaktivan")
+                </MudChip>
+            </MudTd>
+            <MudTd DataLabel="Akcije">
+                <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                               Size="Size.Small"
+                               Color="Color.Primary"
+                               OnClick="@(() => OpenEdit(context))" />
+                <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                               Size="Size.Small"
+                               Color="Color.Error"
+                               OnClick="@(() => ConfirmDelete(context))" />
+            </MudTd>
+        </RowTemplate>
+        <PagerContent>
+            <MudTablePager RowsPerPageString="Redova po stranici:" />
+        </PagerContent>
+    </MudTable>
+</MudPaper>
 
 @code {
+    private List<EmployeeDto> _items = new();
+    private List<LocationDto> _allLocations = new();
+    private List<LocationDto> _activeLocations = new();
 
+    private string? _search;
+    private int? _locationId;
+    private bool? _isActive;
+    private bool _loading;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _allLocations = await LocationService.GetAllAsync();
+        _activeLocations = _allLocations.Where(l => l.IsActive).ToList();
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        _loading = true;
+        _items = await EmployeeService.GetAllAsync(_search, _locationId, _isActive);
+        _loading = false;
+    }
+
+    private async Task OnLocationChanged(int? value)
+    {
+        _locationId = value;
+        await LoadData();
+    }
+
+    private async Task OnActiveChanged(bool? value)
+    {
+        _isActive = value;
+        await LoadData();
+    }
+
+    private async Task ResetFilters()
+    {
+        _search = null;
+        _locationId = null;
+        _isActive = null;
+        await LoadData();
+    }
+
+    private async Task OpenCreate()
+    {
+        var parameters = new DialogParameters<EmployeeDialog>
+        {
+            { x => x.Locations, _activeLocations }
+        };
+
+        var dialog = await DialogService.ShowAsync<EmployeeDialog>("Novi zaposlenik", parameters);
+        var result = await dialog.Result;
+
+        if (result is not null && !result.Canceled)
+        {
+            Snackbar.Add("Zaposlenik je dodan.", Severity.Success);
+            await LoadData();
+        }
+    }
+
+    private async Task OpenEdit(EmployeeDto item)
+    {
+        var options = _activeLocations.ToList();
+
+        if (options.All(l => l.Id != item.LocationId))
+        {
+            var current = _allLocations.FirstOrDefault(l => l.Id == item.LocationId);
+            if (current is not null)
+                options.Add(current);
+        }
+
+        var parameters = new DialogParameters<EmployeeDialog>
+        {
+            { x => x.Existing, item },
+            { x => x.Locations, options }
+        };
+
+        var dialog = await DialogService.ShowAsync<EmployeeDialog>("Izmjena zaposlenika", parameters);
+        var result = await dialog.Result;
+
+        if (result is not null && !result.Canceled)
+        {
+            Snackbar.Add("Zaposlenik je izmijenjen.", Severity.Success);
+            await LoadData();
+        }
+    }
+
+    private async Task ConfirmDelete(EmployeeDto item)
+    {
+        var parameters = new DialogParameters<ConfirmDialog>
+        {
+            { x => x.Message, $"Obrisati zaposlenika \"{item.FullName}\"? Radnja je nepovratna." },
+            { x => x.ConfirmText, "Obriši" }
+        };
+
+        var dialog = await DialogService.ShowAsync<ConfirmDialog>("Potvrda brisanja", parameters);
+        var result = await dialog.Result;
+
+        if (result is null || result.Canceled) return;
+
+        var (success, error) = await EmployeeService.DeleteAsync(item.Id);
+
+        if (success)
+        {
+            Snackbar.Add("Zaposlenik je obrisan.", Severity.Success);
+            await LoadData();
+        }
+        else
+        {
+            Snackbar.Add(error ?? "Brisanje nije uspjelo.", Severity.Error);
+        }
+    }
 }
