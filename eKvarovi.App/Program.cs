@@ -17,6 +17,7 @@ builder.Services.AddScoped(sp => new HttpClient
 builder.Services.AddScoped<LookupService>();
 builder.Services.AddScoped<LocationService>();
 builder.Services.AddScoped<EmployeeService>();
+builder.Services.AddScoped<FaultReportService>();
 
 var app = builder.Build();
 

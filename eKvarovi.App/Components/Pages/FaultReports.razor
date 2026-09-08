@@ -1,9 +1,307 @@
 ﻿@page "/faultreports"
 @rendermode InteractiveServer
+@using eKvarovi.Shared.Dtos
+@using eKvarovi.App.Services
+@using eKvarovi.App.Components.Dialogs
+@inject FaultReportService FaultReportService
+@inject LocationService LocationService
+@inject EmployeeService EmployeeService
+@inject LookupService LookupService
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@inject NavigationManager Nav
 
 <PageTitle>Prijave kvarova</PageTitle>
 
 <MudText Typo="Typo.h4" Class="mb-4">Prijave kvarova</MudText>
-<MudPaper Class="pa-4">
-    <MudText>Modul u izradi.</MudText>
+
+<MudPaper Class="pa-4 mb-4">
+    <MudGrid>
+        <MudItem xs="12" md="3">
+            <MudTextField @bind-Value="_search"
+                          Label="Pretraga"
+                          Placeholder="Naslov ili opis"
+                          Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Filled.Search"
+                          Immediate="true"
+                          DebounceInterval="400"
+                          OnDebounceIntervalElapsed="LoadData" />
+        </MudItem>
+
+        <MudItem xs="12" sm="6" md="2">
+            <MudSelect T="int?" Value="_statusId" ValueChanged="@(async v => { _statusId = v; await LoadData(); })"
+                       Label="Status" Clearable="true">
+                @foreach (var s in _statuses)
+                {
+                    <MudSelectItem T="int?" Value="@((int?)s.Id)">@s.Name</MudSelectItem>
+                }
+            </MudSelect>
+        </MudItem>
+
+        <MudItem xs="12" sm="6" md="2">
+            <MudSelect T="int?" Value="_priorityId" ValueChanged="@(async v => { _priorityId = v; await LoadData(); })"
+                       Label="Prioritet" Clearable="true">
+                @foreach (var p in _priorities)
+                {
+                    <MudSelectItem T="int?" Value="@((int?)p.Id)">@p.Name</MudSelectItem>
+                }
+            </MudSelect>
+        </MudItem>
+
+        <MudItem xs="12" sm="6" md="2">
+            <MudSelect T="int?" Value="_faultTypeId" ValueChanged="@(async v => { _faultTypeId = v; await LoadData(); })"
+                       Label="Vrsta kvara" Clearable="true">
+                @foreach (var t in _faultTypes)
+                {
+                    <MudSelectItem T="int?" Value="@((int?)t.Id)">@t.Name</MudSelectItem>
+                }
+            </MudSelect>
+        </MudItem>
+
+        <MudItem xs="12" sm="6" md="3">
+            <MudSelect T="int?" Value="_locationId" ValueChanged="@(async v => { _locationId = v; await LoadData(); })"
+                       Label="Lokacija" Clearable="true">
+                @foreach (var l in _locations)
+                {
+                    <MudSelectItem T="int?" Value="@((int?)l.Id)">@l.Name</MudSelectItem>
+                }
+            </MudSelect>
+        </MudItem>
+
+        <MudItem xs="12" Class="d-flex flex-wrap align-center gap-4">
+            <MudCheckBox T="bool" Value="_unassigned"
+                         ValueChanged="@(async v => { _unassigned = v; await LoadData(); })"
+                         Label="Samo bez izvršitelja" Color="Color.Primary" />
+
+            <MudCheckBox T="bool" Value="_overdue"
+                         ValueChanged="@(async v => { _overdue = v; await LoadData(); })"
+                         Label="Samo zakašnjele" Color="Color.Error" />
+
+            <MudSpacer />
+
+            <MudButton Variant="Variant.Outlined"
+                       StartIcon="@Icons.Material.Filled.Refresh"
+                       OnClick="ResetFilters">
+                Poništi filtere
+            </MudButton>
+        </MudItem>
+    </MudGrid>
 </MudPaper>
+
+<MudPaper Class="pa-4">
+    <div class="d-flex justify-space-between align-center mb-3">
+        <MudText Typo="Typo.h6">Pronađeno: @_items.Count</MudText>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                   StartIcon="@Icons.Material.Filled.Add"
+                   OnClick="OpenCreate">
+            Nova prijava
+        </MudButton>
+    </div>
+
+    <MudTable Items="_items" Loading="_loading" Hover="true" Striped="true" Dense="true"
+              Breakpoint="Breakpoint.Sm"
+              NoRecordsText="Nema prijava koje odgovaraju filterima.">
+        <HeaderContent>
+            <MudTh>Naslov</MudTh>
+            <MudTh>Lokacija</MudTh>
+            <MudTh>Vrsta</MudTh>
+            <MudTh>Prioritet</MudTh>
+            <MudTh>Status</MudTh>
+            <MudTh>Izvršitelj</MudTh>
+            <MudTh>Rok</MudTh>
+            <MudTh>Prijavljeno</MudTh>
+            <MudTh>Akcije</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Naslov">
+                <MudLink Href="@($"/faultreports/{context.Id}")">@context.Title</MudLink>
+            </MudTd>
+            <MudTd DataLabel="Lokacija">@context.LocationName</MudTd>
+            <MudTd DataLabel="Vrsta">@(context.FaultTypeName ?? "—")</MudTd>
+            <MudTd DataLabel="Prioritet">
+                @if (context.PriorityName is null)
+                {
+                    <span>—</span>
+                }
+                else
+                {
+                    <MudChip T="string" Size="Size.Small" Color="@PriorityColor(context.PriorityRank)">
+                        @context.PriorityName
+                    </MudChip>
+                }
+            </MudTd>
+            <MudTd DataLabel="Status">
+                <MudChip T="string" Size="Size.Small" Color="@StatusColor(context.StatusCode)">
+                    @context.StatusName
+                </MudChip>
+            </MudTd>
+            <MudTd DataLabel="Izvršitelj">@(context.ActiveTechnicianName ?? "—")</MudTd>
+            <MudTd DataLabel="Rok">
+                @if (context.DueDate is null)
+                {
+                    <span>—</span>
+                }
+                else
+                {
+                    <MudText Typo="Typo.body2" Color="@(context.IsOverdue ? Color.Error : Color.Default)">
+                        @context.DueDate.Value.ToLocalTime().ToString("dd.MM.yyyy.")
+                    </MudText>
+                }
+            </MudTd>
+            <MudTd DataLabel="Prijavljeno">@context.CreatedAt.ToLocalTime().ToString("dd.MM.yyyy.")</MudTd>
+            <MudTd DataLabel="Akcije">
+                <MudIconButton Icon="@Icons.Material.Filled.Visibility" Size="Size.Small"
+                               Color="Color.Default"
+                               OnClick="@(() => Nav.NavigateTo($"/faultreports/{context.Id}"))" />
+                <MudIconButton Icon="@Icons.Material.Filled.FactCheck" Size="Size.Small"
+                               Color="Color.Info"
+                               OnClick="@(() => OpenReview(context))" />
+                <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small"
+                               Color="Color.Error"
+                               OnClick="@(() => ConfirmDelete(context))" />
+            </MudTd>
+        </RowTemplate>
+        <PagerContent>
+            <MudTablePager RowsPerPageString="Redova po stranici:" />
+        </PagerContent>
+    </MudTable>
+</MudPaper>
+
+@code {
+    private List<FaultReportListDto> _items = new();
+    private List<LookupDto> _statuses = new();
+    private List<LookupDto> _priorities = new();
+    private List<LookupDto> _faultTypes = new();
+    private List<LocationDto> _locations = new();
+    private List<LocationDto> _activeLocations = new();
+    private List<EmployeeDto> _employees = new();
+
+    private string? _search;
+    private int? _statusId;
+    private int? _priorityId;
+    private int? _faultTypeId;
+    private int? _locationId;
+    private bool _unassigned;
+    private bool _overdue;
+    private bool _loading;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _statuses = await LookupService.GetFaultStatusesAsync();
+        _priorities = await LookupService.GetFaultPrioritiesAsync();
+        _faultTypes = await LookupService.GetFaultTypesAsync();
+        _locations = await LocationService.GetAllAsync();
+        _activeLocations = _locations.Where(l => l.IsActive).ToList();
+        _employees = await EmployeeService.GetAllAsync(isActive: true);
+
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        _loading = true;
+        _items = await FaultReportService.GetAllAsync(
+            search: _search,
+            statusId: _statusId,
+            priorityId: _priorityId,
+            faultTypeId: _faultTypeId,
+            locationId: _locationId,
+            unassigned: _unassigned ? true : null,
+            overdue: _overdue ? true : null);
+        _loading = false;
+    }
+
+    private async Task ResetFilters()
+    {
+        _search = null;
+        _statusId = null;
+        _priorityId = null;
+        _faultTypeId = null;
+        _locationId = null;
+        _unassigned = false;
+        _overdue = false;
+        await LoadData();
+    }
+
+    private static Color PriorityColor(int? rank) => rank switch
+    {
+        4 => Color.Error,
+        3 => Color.Warning,
+        2 => Color.Info,
+        _ => Color.Default
+    };
+
+    private static Color StatusColor(string code) => code switch
+    {
+        "ZAPRIMLJENO" => Color.Default,
+        "PREGLEDANO" => Color.Info,
+        "DODIJELJENO" => Color.Primary,
+        "U_RADU" => Color.Warning,
+        "RIJESENO" => Color.Success,
+        "ZATVORENO" => Color.Dark,
+        _ => Color.Default
+    };
+
+    private async Task OpenCreate()
+    {
+        var parameters = new DialogParameters<FaultReportDialog>
+        {
+            { x => x.Locations, _activeLocations },
+            { x => x.Employees, _employees }
+        };
+
+        var dialog = await DialogService.ShowAsync<FaultReportDialog>("Nova prijava kvara", parameters);
+        var result = await dialog.Result;
+
+        if (result is not null && !result.Canceled)
+        {
+            Snackbar.Add("Prijava je otvorena.", Severity.Success);
+            await LoadData();
+        }
+    }
+
+    private async Task OpenReview(FaultReportListDto item)
+    {
+        var parameters = new DialogParameters<ReviewDialog>
+        {
+            { x => x.Report, item },
+            { x => x.FaultTypes, _faultTypes },
+            { x => x.Priorities, _priorities }
+        };
+
+        var dialog = await DialogService.ShowAsync<ReviewDialog>($"Pregled: {item.Title}", parameters);
+        var result = await dialog.Result;
+
+        if (result is not null && !result.Canceled)
+        {
+            Snackbar.Add("Pregled je spremljen.", Severity.Success);
+            await LoadData();
+        }
+    }
+
+    private async Task ConfirmDelete(FaultReportListDto item)
+    {
+        var parameters = new DialogParameters<ConfirmDialog>
+        {
+            { x => x.Message, $"Obrisati prijavu \"{item.Title}\"? Radnja je nepovratna." },
+            { x => x.ConfirmText, "Obriši" }
+        };
+
+        var dialog = await DialogService.ShowAsync<ConfirmDialog>("Potvrda brisanja", parameters);
+        var result = await dialog.Result;
+
+        if (result is null || result.Canceled) return;
+
+        var (success, error) = await FaultReportService.DeleteAsync(item.Id);
+
+        if (success)
+        {
+            Snackbar.Add("Prijava je obrisana.", Severity.Success);
+            await LoadData();
+        }
+        else
+        {
+            Snackbar.Add(error ?? "Brisanje nije uspjelo.", Severity.Error);
+        }
+    }
+}

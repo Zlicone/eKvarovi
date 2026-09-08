@@ -1,0 +1,123 @@
+﻿@using eKvarovi.Shared.Dtos
+@using eKvarovi.App.Services
+@inject FaultReportService FaultReportService
+
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="_form" Model="_model">
+            <MudTextField @bind-Value="_model.Title"
+                          Label="Naslov *"
+                          Required="true"
+                          RequiredError="Naslov je obavezan."
+                          MaxLength="200"
+                          Class="mb-3" />
+
+            <MudTextField @bind-Value="_model.Description"
+                          Label="Opis kvara *"
+                          Required="true"
+                          RequiredError="Opis je obavezan."
+                          Lines="4"
+                          MaxLength="2000"
+                          Class="mb-3" />
+
+            <MudSelect T="int" @bind-Value="_model.LocationId"
+                       Label="Lokacija *"
+                       Validation="@(new Func<int, string?>(v => v <= 0 ? "Lokacija je obavezna." : null))"
+                       Class="mb-3">
+                @foreach (var loc in Locations)
+                {
+                    <MudSelectItem T="int" Value="@loc.Id">@loc.Name</MudSelectItem>
+                }
+            </MudSelect>
+
+            @if (!IsEdit)
+            {
+                <MudSelect T="int" @bind-Value="_reporterId"
+                           Label="Prijavitelj *"
+                           Validation="@(new Func<int, string?>(v => v <= 0 ? "Prijavitelj je obavezan." : null))">
+                    @foreach (var emp in Employees)
+                    {
+                        <MudSelectItem T="int" Value="@emp.Id">@emp.FullName (@emp.LocationName)</MudSelectItem>
+                    }
+                </MudSelect>
+            }
+        </MudForm>
+
+        @if (!string.IsNullOrWhiteSpace(_error))
+        {
+            <MudAlert Severity="Severity.Error" Class="mt-3">@_error</MudAlert>
+        }
+    </DialogContent>
+
+    <DialogActions>
+        <MudButton OnClick="Cancel">Odustani</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Save" Disabled="_saving">
+            @(_saving ? "Spremanje..." : "Spremi")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter] public FaultReportListDto? Existing { get; set; }
+    [Parameter] public List<LocationDto> Locations { get; set; } = new();
+    [Parameter] public List<EmployeeDto> Employees { get; set; } = new();
+
+    private MudForm _form = default!;
+    private FaultReportUpdateDto _model = new();
+    private int _reporterId;
+    private bool _saving;
+    private string? _error;
+
+    private bool IsEdit => Existing is not null;
+
+    protected override void OnInitialized()
+    {
+        if (Existing is not null)
+        {
+            _model = new FaultReportUpdateDto
+            {
+                Title = Existing.Title,
+                LocationId = Existing.LocationId,
+                Description = string.Empty
+            };
+        }
+    }
+
+    private async Task Save()
+    {
+        await _form.Validate();
+        if (!_form.IsValid) return;
+
+        _saving = true;
+        _error = null;
+
+        (bool Success, string? Error) result;
+
+        if (IsEdit)
+        {
+            result = await FaultReportService.UpdateAsync(Existing!.Id, _model);
+        }
+        else
+        {
+            result = await FaultReportService.CreateAsync(new FaultReportCreateDto
+            {
+                Title = _model.Title,
+                Description = _model.Description,
+                LocationId = _model.LocationId,
+                ReporterId = _reporterId
+            });
+        }
+
+        _saving = false;
+
+        if (result.Success)
+            MudDialog.Close(DialogResult.Ok(true));
+        else
+            _error = result.Error;
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}

@@ -1,0 +1,119 @@
+﻿@using eKvarovi.Shared.Dtos
+@using eKvarovi.App.Services
+@inject FaultReportService FaultReportService
+
+<MudDialog>
+    <DialogContent>
+        <MudText Typo="Typo.body2" Class="mb-3">
+            Odredite vrstu kvara i prioritet. Kritični prioritet zahtijeva rok rješavanja.
+        </MudText>
+
+        <MudForm @ref="_form" Model="_model">
+            <MudSelect T="int" @bind-Value="_model.FaultTypeId"
+                       Label="Vrsta kvara *"
+                       Validation="@(new Func<int, string?>(v => v <= 0 ? "Vrsta kvara je obavezna." : null))"
+                       Class="mb-3">
+                @foreach (var t in FaultTypes)
+                {
+                    <MudSelectItem T="int" Value="@t.Id">@t.Name</MudSelectItem>
+                }
+            </MudSelect>
+
+            <MudSelect T="int" Value="_model.PriorityId"
+                       ValueChanged="OnPriorityChanged"
+                       Label="Prioritet *"
+                       Validation="@(new Func<int, string?>(v => v <= 0 ? "Prioritet je obavezan." : null))"
+                       Class="mb-3">
+                @foreach (var p in Priorities)
+                {
+                    <MudSelectItem T="int" Value="@p.Id">@p.Name</MudSelectItem>
+                }
+            </MudSelect>
+
+            <MudDatePicker @bind-Date="_dueDate"
+                           Label="@(IsCritical ? "Rok rješavanja *" : "Rok rješavanja")"
+                           MinDate="DateTime.Today"
+                           Clearable="true"
+                           Validation="@(new Func<DateTime?, string?>(ValidateDueDate))" />
+        </MudForm>
+
+        @if (IsCritical)
+        {
+            <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-3">
+                Kritična prijava mora imati rok.
+            </MudAlert>
+        }
+
+        @if (!string.IsNullOrWhiteSpace(_error))
+        {
+            <MudAlert Severity="Severity.Error" Class="mt-3">@_error</MudAlert>
+        }
+    </DialogContent>
+
+    <DialogActions>
+        <MudButton OnClick="Cancel">Odustani</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Save" Disabled="_saving">
+            @(_saving ? "Spremanje..." : "Spremi pregled")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter] public FaultReportListDto Report { get; set; } = default!;
+    [Parameter] public List<LookupDto> FaultTypes { get; set; } = new();
+    [Parameter] public List<LookupDto> Priorities { get; set; } = new();
+
+    private MudForm _form = default!;
+    private FaultReportReviewDto _model = new();
+    private DateTime? _dueDate;
+    private bool _saving;
+    private string? _error;
+
+    private bool IsCritical =>
+        _model.PriorityId > 0 &&
+        Priorities.Count > 0 &&
+        _model.PriorityId == Priorities.Last().Id;
+
+    protected override void OnInitialized()
+    {
+        _model.FaultTypeId = Report.FaultTypeId ?? 0;
+        _model.PriorityId = Report.PriorityId ?? 0;
+        _dueDate = Report.DueDate;
+    }
+
+    private void OnPriorityChanged(int value)
+    {
+        _model.PriorityId = value;
+    }
+
+    private string? ValidateDueDate(DateTime? value)
+    {
+        if (IsCritical && value is null)
+            return "Kritična prijava mora imati rok.";
+        return null;
+    }
+
+    private async Task Save()
+    {
+        await _form.Validate();
+        if (!_form.IsValid) return;
+
+        _saving = true;
+        _error = null;
+
+        _model.DueDate = _dueDate;
+        var result = await FaultReportService.ReviewAsync(Report.Id, _model);
+
+        _saving = false;
+
+        if (result.Success)
+            MudDialog.Close(DialogResult.Ok(true));
+        else
+            _error = result.Error;
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}
