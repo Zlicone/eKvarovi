@@ -1,4 +1,5 @@
 ﻿using eKvarovi.Api.Models;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
 namespace eKvarovi.Api.Data;
@@ -15,6 +16,45 @@ public static class DbSeeder
         SeedEmployees(db);
         SeedMaterials(db);
         SeedDemoReports(db);
+        SeedUsers(db);
+    }
+
+    private static void SeedUsers(EKvaroviDbContext db)
+    {
+        if (db.AppUsers.Any()) return;
+
+        var hasher = new PasswordHasher<AppUser>();
+        var now = DateTime.UtcNow;
+
+        var users = new List<(string Username, string Email, int? EmployeeId, int[] RoleIds)>
+    {
+        ("admin",    "admin@zadarska-zupanija.hr",    null, new[] { 1 }),
+        ("upravitelj","upravitelj@zadarska-zupanija.hr", 2,  new[] { 2, 4 }),
+        ("izvrsitelj","izvrsitelj@zadarska-zupanija.hr", 5,  new[] { 3, 4 }),
+        ("prijavitelj","prijavitelj@zadarska-zupanija.hr", 3, new[] { 4 })
+    };
+
+        foreach (var (username, email, employeeId, roleIds) in users)
+        {
+            var user = new AppUser
+            {
+                Username = username,
+                Email = email,
+                EmployeeId = employeeId,
+                IsActive = true,
+                CreatedAt = now
+            };
+
+            user.PasswordHash = hasher.HashPassword(user, "Demo1234!");
+
+            db.AppUsers.Add(user);
+            db.SaveChanges();
+
+            foreach (var roleId in roleIds)
+                db.AppUserRoles.Add(new AppUserRole { AppUserId = user.Id, AppRoleId = roleId });
+        }
+
+        db.SaveChanges();
     }
 
     private static void SeedLookups(EKvaroviDbContext db)
