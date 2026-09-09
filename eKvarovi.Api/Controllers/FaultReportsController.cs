@@ -353,4 +353,82 @@ public class FaultReportsController : ControllerBase
         await _db.SaveChangesAsync();
         return NoContent();
     }
+
+    [HttpGet("{id:int}/detail")]
+    public async Task<ActionResult<FaultReportDetailDto>> GetDetail(int id)
+    {
+        var now = DateTime.UtcNow;
+
+        var item = await _db.FaultReports
+            .Where(x => x.Id == id)
+            .Select(x => new FaultReportDetailDto
+            {
+                Id = x.Id,
+                Title = x.Title,
+                Description = x.Description,
+                LocationId = x.LocationId,
+                LocationName = x.Location!.Name,
+                LocationAddress = x.Location!.Address,
+                LocationCity = x.Location!.City,
+                ReporterId = x.ReporterId,
+                ReporterName = x.Reporter!.FirstName + " " + x.Reporter!.LastName,
+                ReporterEmail = x.Reporter!.Email,
+                FaultTypeId = x.FaultTypeId,
+                FaultTypeName = x.FaultType != null ? x.FaultType.Name : null,
+                PriorityId = x.PriorityId,
+                PriorityName = x.Priority != null ? x.Priority.Name : null,
+                PriorityRank = x.Priority != null ? x.Priority.Rank : (int?)null,
+                StatusId = x.StatusId,
+                StatusCode = x.Status!.Code,
+                StatusName = x.Status!.Name,
+                DueDate = x.DueDate,
+                CreatedAt = x.CreatedAt,
+                ReviewedAt = x.ReviewedAt,
+                ResolvedAt = x.ResolvedAt,
+                ClosedAt = x.ClosedAt,
+                ClosedByName = x.ClosedByEmployee != null
+                    ? x.ClosedByEmployee.FirstName + " " + x.ClosedByEmployee.LastName
+                    : null,
+                ActiveTechnicianName = x.Assignments
+                    .Where(a => a.UnassignedAt == null)
+                    .Select(a => a.Technician!.FirstName + " " + a.Technician!.LastName)
+                    .FirstOrDefault(),
+                IsOverdue = x.DueDate != null &&
+                            x.DueDate < now &&
+                            x.Status!.Code != FaultStatusCodes.Resolved &&
+                            x.Status!.Code != FaultStatusCodes.Closed,
+                CanBeClosed = x.Status!.Code != FaultStatusCodes.Closed &&
+                              x.Assignments.SelectMany(a => a.Interventions)
+                                  .Any(i => i.Status!.Code == InterventionStatusCodes.Completed)
+            })
+            .FirstOrDefaultAsync();
+
+        if (item is null)
+            return NotFound($"Prijava s ID-em {id} ne postoji.");
+
+        return Ok(item);
+    }
+
+    [HttpGet("{id:int}/events")]
+    public async Task<ActionResult<List<FaultReportEventDto>>> GetEvents(int id)
+    {
+        if (!await _db.FaultReports.AnyAsync(r => r.Id == id))
+            return NotFound($"Prijava s ID-em {id} ne postoji.");
+
+        var items = await _db.FaultReportEvents
+            .Where(e => e.FaultReportId == id)
+            .OrderByDescending(e => e.ChangedAt)
+            .ThenByDescending(e => e.Id)
+            .Select(e => new FaultReportEventDto
+            {
+                Id = e.Id,
+                EventType = e.EventType,
+                OldValue = e.OldValue,
+                NewValue = e.NewValue,
+                ChangedAt = e.ChangedAt
+            })
+            .ToListAsync();
+
+        return Ok(items);
+    }
 }

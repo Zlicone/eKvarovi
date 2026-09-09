@@ -1,4 +1,425 @@
-﻿@code {
-    [Parameter]
-    public int Id { get; set; }
+﻿@page "/faultreports/{Id:int}"
+@rendermode InteractiveServer
+@using eKvarovi.Shared.Dtos
+@using eKvarovi.App.Services
+@using eKvarovi.App.Components.Dialogs
+@inject FaultReportService FaultReportService
+@inject AssignmentService AssignmentService
+@inject InterventionService InterventionService
+@inject EmployeeService EmployeeService
+@inject MaterialService MaterialService
+@inject LookupService LookupService
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@inject NavigationManager Nav
+
+<PageTitle>@(_report?.Title ?? "Prijava")</PageTitle>
+
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else if (_report is null)
+{
+    <MudAlert Severity="Severity.Error">Prijava nije pronađena.</MudAlert>
+    <MudButton Class="mt-3" StartIcon="@Icons.Material.Filled.ArrowBack"
+               OnClick="@(() => Nav.NavigateTo("/faultreports"))">
+        Natrag na popis
+    </MudButton>
+}
+else
+{
+    <div class="d-flex align-center mb-4 gap-2">
+        <MudIconButton Icon="@Icons.Material.Filled.ArrowBack"
+                       OnClick="@(() => Nav.NavigateTo("/faultreports"))" />
+        <MudText Typo="Typo.h4">@_report.Title</MudText>
+        <MudChip T="string" Color="@StatusColor(_report.StatusCode)">@_report.StatusName</MudChip>
+        @if (_report.IsOverdue)
+        {
+            <MudChip T="string" Color="Color.Error" Icon="@Icons.Material.Filled.Warning">
+                Zakašnjela
+            </MudChip>
+        }
+    </div>
+
+    <MudGrid>
+        <MudItem xs="12" md="8">
+            <MudPaper Class="pa-4 mb-4">
+                <MudText Typo="Typo.h6" Class="mb-3">Opis kvara</MudText>
+                <MudText Typo="Typo.body1" Style="white-space: pre-wrap;">@_report.Description</MudText>
+            </MudPaper>
+
+            <MudPaper Class="pa-4 mb-4">
+                <div class="d-flex justify-space-between align-center mb-3">
+                    <MudText Typo="Typo.h6">Povijest dodjela (@_assignments.Count)</MudText>
+                    <MudButton Size="Size.Small" Variant="Variant.Outlined"
+                               StartIcon="@Icons.Material.Filled.AssignmentInd"
+                               OnClick="OpenAssign">
+                        @(_report.ActiveTechnicianName is null ? "Dodijeli" : "Prebaci")
+                    </MudButton>
+                </div>
+
+                <MudTable Items="_assignments" Dense="true" Hover="true"
+                          NoRecordsText="Prijava još nije dodijeljena nijednom izvršitelju.">
+                    <HeaderContent>
+                        <MudTh>Izvršitelj</MudTh>
+                        <MudTh>Dodijeljeno</MudTh>
+                        <MudTh>Skinuto</MudTh>
+                        <MudTh>Intervencije</MudTh>
+                        <MudTh>Stanje</MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd DataLabel="Izvršitelj">@context.TechnicianName</MudTd>
+                        <MudTd DataLabel="Dodijeljeno">@context.AssignedAt.ToLocalTime().ToString("dd.MM.yyyy. HH:mm")</MudTd>
+                        <MudTd DataLabel="Skinuto">
+                            @(context.UnassignedAt is null
+                                ? "—"
+                                : context.UnassignedAt.Value.ToLocalTime().ToString("dd.MM.yyyy. HH:mm"))
+                        </MudTd>
+                        <MudTd DataLabel="Intervencije">@context.InterventionCount</MudTd>
+                        <MudTd DataLabel="Stanje">
+                            <MudChip T="string" Size="Size.Small"
+                                     Color="@(context.IsActive ? Color.Success : Color.Default)">
+                                @(context.IsActive ? "Aktivan" : "Zatvoren")
+                            </MudChip>
+                        </MudTd>
+                    </RowTemplate>
+                </MudTable>
+            </MudPaper>
+
+            <MudPaper Class="pa-4">
+                <MudText Typo="Typo.h6" Class="mb-3">Intervencije (@_interventions.Count)</MudText>
+
+                <MudTable Items="_interventions" Dense="true" Hover="true"
+                          NoRecordsText="Još nije zabilježena nijedna intervencija.">
+                    <HeaderContent>
+                        <MudTh>Izvršitelj</MudTh>
+                        <MudTh>Status</MudTh>
+                        <MudTh>Početak</MudTh>
+                        <MudTh>Trajanje</MudTh>
+                        <MudTh>Materijali</MudTh>
+                        <MudTh></MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd DataLabel="Izvršitelj">@context.TechnicianName</MudTd>
+                        <MudTd DataLabel="Status">
+                            <MudChip T="string" Size="Size.Small" Color="@InterventionColor(context.StatusCode)">
+                                @context.StatusName
+                            </MudChip>
+                        </MudTd>
+                        <MudTd DataLabel="Početak">
+                            @(context.StartedAt is null
+                                ? "—"
+                                : context.StartedAt.Value.ToLocalTime().ToString("dd.MM. HH:mm"))
+                        </MudTd>
+                        <MudTd DataLabel="Trajanje">
+                            @(context.DurationMinutes is null ? "—" : FormatDuration(context.DurationMinutes.Value))
+                        </MudTd>
+                        <MudTd DataLabel="Materijali">@context.MaterialCount</MudTd>
+                        <MudTd>
+                            <MudIconButton Icon="@Icons.Material.Filled.Inventory" Size="Size.Small"
+                                           OnClick="@(() => OpenMaterials(context))" />
+                        </MudTd>
+                    </RowTemplate>
+                </MudTable>
+
+                @if (!string.IsNullOrWhiteSpace(_lastNote))
+                {
+                    <MudDivider Class="my-3" />
+                    <MudText Typo="Typo.subtitle2">Zadnja bilješka izvršitelja</MudText>
+                    <MudText Typo="Typo.body2" Style="white-space: pre-wrap;">@_lastNote</MudText>
+                }
+            </MudPaper>
+        </MudItem>
+
+        <MudItem xs="12" md="4">
+            <MudPaper Class="pa-4 mb-4">
+                <MudText Typo="Typo.h6" Class="mb-3">Podaci</MudText>
+
+                <MudList T="string" Dense="true">
+                    <MudListItem T="string" Icon="@Icons.Material.Filled.LocationOn">
+                        <MudText Typo="Typo.caption">Lokacija</MudText>
+                        <MudText Typo="Typo.body2">@_report.LocationName</MudText>
+                        <MudText Typo="Typo.caption">@_report.LocationAddress, @_report.LocationCity</MudText>
+                    </MudListItem>
+
+                    <MudListItem T="string" Icon="@Icons.Material.Filled.Person">
+                        <MudText Typo="Typo.caption">Prijavitelj</MudText>
+                        <MudText Typo="Typo.body2">@_report.ReporterName</MudText>
+                        <MudText Typo="Typo.caption">@_report.ReporterEmail</MudText>
+                    </MudListItem>
+
+                    <MudListItem T="string" Icon="@Icons.Material.Filled.Category">
+                        <MudText Typo="Typo.caption">Vrsta kvara</MudText>
+                        <MudText Typo="Typo.body2">@(_report.FaultTypeName ?? "još nije određena")</MudText>
+                    </MudListItem>
+
+                    <MudListItem T="string" Icon="@Icons.Material.Filled.PriorityHigh">
+                        <MudText Typo="Typo.caption">Prioritet</MudText>
+                        <MudText Typo="Typo.body2">@(_report.PriorityName ?? "još nije određen")</MudText>
+                    </MudListItem>
+
+                    <MudListItem T="string" Icon="@Icons.Material.Filled.Engineering">
+                        <MudText Typo="Typo.caption">Aktivni izvršitelj</MudText>
+                        <MudText Typo="Typo.body2">@(_report.ActiveTechnicianName ?? "nije dodijeljen")</MudText>
+                    </MudListItem>
+
+                    <MudListItem T="string" Icon="@Icons.Material.Filled.Event">
+                        <MudText Typo="Typo.caption">Rok rješavanja</MudText>
+                        <MudText Typo="Typo.body2"
+                                 Color="@(_report.IsOverdue ? Color.Error : Color.Default)">
+                            @(_report.DueDate is null
+                                ? "nije postavljen"
+                                : _report.DueDate.Value.ToLocalTime().ToString("dd.MM.yyyy."))
+                        </MudText>
+                    </MudListItem>
+                </MudList>
+
+                <MudDivider Class="my-3" />
+
+                <MudText Typo="Typo.caption">Prijavljeno: @_report.CreatedAt.ToLocalTime().ToString("dd.MM.yyyy. HH:mm")</MudText><br />
+                @if (_report.ReviewedAt is not null)
+                {
+                    <MudText Typo="Typo.caption">Pregledano: @_report.ReviewedAt.Value.ToLocalTime().ToString("dd.MM.yyyy. HH:mm")</MudText><br />
+                }
+                @if (_report.ResolvedAt is not null)
+                {
+                    <MudText Typo="Typo.caption">Riješeno: @_report.ResolvedAt.Value.ToLocalTime().ToString("dd.MM.yyyy. HH:mm")</MudText><br />
+                }
+                @if (_report.ClosedAt is not null)
+                {
+                    <MudText Typo="Typo.caption">
+                        Zatvorio @_report.ClosedByName: @_report.ClosedAt.Value.ToLocalTime().ToString("dd.MM.yyyy. HH:mm")
+                    </MudText>
+                }
+            </MudPaper>
+
+            <MudPaper Class="pa-4 mb-4">
+                <MudText Typo="Typo.h6" Class="mb-3">Radnje</MudText>
+
+                <MudButton Variant="Variant.Outlined" Color="Color.Info" FullWidth="true"
+                           StartIcon="@Icons.Material.Filled.FactCheck" Class="mb-2"
+                           Disabled="@(_report.StatusCode == "ZATVORENO")"
+                           OnClick="OpenReview">
+                    Pregled i prioritet
+                </MudButton>
+
+                <MudButton Variant="Variant.Outlined" Color="Color.Primary" FullWidth="true"
+                           StartIcon="@Icons.Material.Filled.Build" Class="mb-2"
+                           Disabled="@(_report.ActiveTechnicianName is null || _report.StatusCode == "ZATVORENO")"
+                           OnClick="OpenNewIntervention">
+                    Nova intervencija
+                </MudButton>
+
+                <MudButton Variant="Variant.Filled" Color="Color.Success" FullWidth="true"
+                           StartIcon="@Icons.Material.Filled.CheckCircle"
+                           Disabled="!_report.CanBeClosed"
+                           OnClick="OpenClose">
+                    Zatvori prijavu
+                </MudButton>
+
+                @if (!_report.CanBeClosed && _report.StatusCode != "ZATVORENO")
+                {
+                    <MudText Typo="Typo.caption" Class="mt-2">
+                        Prijavu je moguće zatvoriti tek nakon uspješno završene intervencije.
+                    </MudText>
+                }
+            </MudPaper>
+
+            <MudPaper Class="pa-4">
+                <MudText Typo="Typo.h6" Class="mb-3">Vremenska crta</MudText>
+
+                @if (_events.Count == 0)
+                {
+                    <MudText Typo="Typo.body2">Još nema zabilježenih promjena.</MudText>
+                }
+                else
+                {
+                    <MudTimeline TimelinePosition="TimelinePosition.Start">
+                        @foreach (var ev in _events)
+                        {
+                            <MudTimelineItem Size="Size.Small" Color="Color.Primary">
+                                <MudText Typo="Typo.body2"><b>@ev.EventType</b></MudText>
+                                @if (ev.OldValue is not null || ev.NewValue is not null)
+                                {
+                                    <MudText Typo="Typo.caption">
+                                        @(ev.OldValue ?? "—") → @(ev.NewValue ?? "—")
+                                    </MudText>
+                                }
+                                <br />
+                                <MudText Typo="Typo.caption">
+                                    @ev.ChangedAt.ToLocalTime().ToString("dd.MM.yyyy. HH:mm")
+                                </MudText>
+                            </MudTimelineItem>
+                        }
+                    </MudTimeline>
+                }
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+}
+
+@code {
+    [Parameter] public int Id { get; set; }
+
+    private FaultReportDetailDto? _report;
+    private List<AssignmentDto> _assignments = new();
+    private List<InterventionDto> _interventions = new();
+    private List<FaultReportEventDto> _events = new();
+    private List<EmployeeDto> _employees = new();
+    private List<MaterialDto> _materials = new();
+    private List<LookupDto> _faultTypes = new();
+    private List<LookupDto> _priorities = new();
+
+    private bool _loading = true;
+
+    private string? _lastNote => _interventions
+        .OrderByDescending(i => i.CreatedAt)
+        .FirstOrDefault(i => !string.IsNullOrWhiteSpace(i.Note))?.Note;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _loading = true;
+
+        _report = await FaultReportService.GetDetailAsync(Id);
+
+        if (_report is not null)
+        {
+            _assignments = await AssignmentService.GetAllAsync(faultReportId: Id);
+            _interventions = await InterventionService.GetAllAsync(faultReportId: Id);
+            _events = await FaultReportService.GetEventsAsync(Id);
+            _employees = await EmployeeService.GetAllAsync(isActive: true);
+            _materials = await MaterialService.GetAllAsync(isActive: true);
+            _faultTypes = await LookupService.GetFaultTypesAsync();
+            _priorities = await LookupService.GetFaultPrioritiesAsync();
+        }
+
+        _loading = false;
+    }
+
+    private async Task Reload() => await OnParametersSetAsync();
+
+    private static string FormatDuration(int minutes)
+    {
+        var h = minutes / 60;
+        var m = minutes % 60;
+        return h > 0 ? $"{h} h {m} min" : $"{m} min";
+    }
+
+    private static Color StatusColor(string code) => code switch
+    {
+        "ZAPRIMLJENO" => Color.Default,
+        "PREGLEDANO" => Color.Info,
+        "DODIJELJENO" => Color.Primary,
+        "U_RADU" => Color.Warning,
+        "RIJESENO" => Color.Success,
+        "ZATVORENO" => Color.Dark,
+        _ => Color.Default
+    };
+
+    private static Color InterventionColor(string code) => code switch
+    {
+        "PLANIRANA" => Color.Default,
+        "U_TIJEKU" => Color.Warning,
+        "ZAVRSENA" => Color.Success,
+        "NEUSPJESNA" => Color.Error,
+        _ => Color.Default
+    };
+
+    private async Task OpenReview()
+    {
+        var listDto = new FaultReportListDto
+        {
+            Id = _report!.Id,
+            Title = _report.Title,
+            FaultTypeId = _report.FaultTypeId,
+            PriorityId = _report.PriorityId,
+            DueDate = _report.DueDate
+        };
+
+        var parameters = new DialogParameters<ReviewDialog>
+        {
+            { x => x.Report, listDto },
+            { x => x.FaultTypes, _faultTypes },
+            { x => x.Priorities, _priorities }
+        };
+
+        var dialog = await DialogService.ShowAsync<ReviewDialog>("Pregled prijave", parameters);
+        var result = await dialog.Result;
+
+        if (result is not null && !result.Canceled)
+        {
+            Snackbar.Add("Pregled je spremljen.", Severity.Success);
+            await Reload();
+        }
+    }
+
+    private async Task OpenAssign()
+    {
+        var parameters = new DialogParameters<AssignDialog>
+        {
+            { x => x.FaultReportId, _report!.Id },
+            { x => x.CurrentTechnicianName, _report.ActiveTechnicianName },
+            { x => x.Technicians, _employees }
+        };
+
+        var dialog = await DialogService.ShowAsync<AssignDialog>("Dodjela naloga", parameters);
+        var result = await dialog.Result;
+
+        if (result is not null && !result.Canceled)
+        {
+            Snackbar.Add("Nalog je dodijeljen.", Severity.Success);
+            await Reload();
+        }
+    }
+
+    private async Task OpenNewIntervention()
+    {
+        var active = _assignments.Where(a => a.IsActive).ToList();
+
+        var parameters = new DialogParameters<NewInterventionDialog>
+        {
+            { x => x.Assignments, active }
+        };
+
+        var dialog = await DialogService.ShowAsync<NewInterventionDialog>("Nova intervencija", parameters);
+        var result = await dialog.Result;
+
+        if (result is not null && !result.Canceled)
+        {
+            Snackbar.Add("Intervencija je otvorena.", Severity.Success);
+            await Reload();
+        }
+    }
+
+    private async Task OpenMaterials(InterventionDto item)
+    {
+        var parameters = new DialogParameters<MaterialUsageDialog>
+        {
+            { x => x.Intervention, item },
+            { x => x.Materials, _materials }
+        };
+
+        await DialogService.ShowAsync<MaterialUsageDialog>("Utrošak materijala", parameters);
+        await Reload();
+    }
+
+    private async Task OpenClose()
+    {
+        var parameters = new DialogParameters<CloseReportDialog>
+        {
+            { x => x.ReportId, _report!.Id },
+            { x => x.ReportTitle, _report.Title },
+            { x => x.Employees, _employees }
+        };
+
+        var dialog = await DialogService.ShowAsync<CloseReportDialog>("Zatvaranje prijave", parameters);
+        var result = await dialog.Result;
+
+        if (result is not null && !result.Canceled)
+        {
+            Snackbar.Add("Prijava je zatvorena.", Severity.Success);
+            await Reload();
+        }
+    }
 }

@@ -96,4 +96,17 @@ public class FaultReportService
         var message = await response.Content.ReadAsStringAsync();
         return string.IsNullOrWhiteSpace(message) ? fallback : message;
     }
+
+    public async Task<FaultReportDetailDto?> GetDetailAsync(int id)
+    {
+        var response = await _http.GetAsync($"api/faultreports/{id}/detail");
+        if (!response.IsSuccessStatusCode) return null;
+        return await response.Content.ReadFromJsonAsync<FaultReportDetailDto>();
+    }
+
+    public async Task<List<FaultReportEventDto>> GetEventsAsync(int id)
+    {
+        var result = await _http.GetFromJsonAsync<List<FaultReportEventDto>>($"api/faultreports/{id}/events");
+        return result ?? new List<FaultReportEventDto>();
+    }
 }

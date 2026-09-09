@@ -73,3 +73,50 @@ public class FaultReportReviewDto
 
     public DateTime? DueDate { get; set; }
 }
+
+public class FaultReportDetailDto
+{
+    public int Id { get; set; }
+    public string Title { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+
+    public int LocationId { get; set; }
+    public string LocationName { get; set; } = string.Empty;
+    public string LocationAddress { get; set; } = string.Empty;
+    public string LocationCity { get; set; } = string.Empty;
+
+    public int ReporterId { get; set; }
+    public string ReporterName { get; set; } = string.Empty;
+    public string ReporterEmail { get; set; } = string.Empty;
+
+    public int? FaultTypeId { get; set; }
+    public string? FaultTypeName { get; set; }
+
+    public int? PriorityId { get; set; }
+    public string? PriorityName { get; set; }
+    public int? PriorityRank { get; set; }
+
+    public int StatusId { get; set; }
+    public string StatusCode { get; set; } = string.Empty;
+    public string StatusName { get; set; } = string.Empty;
+
+    public DateTime? DueDate { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public DateTime? ReviewedAt { get; set; }
+    public DateTime? ResolvedAt { get; set; }
+    public DateTime? ClosedAt { get; set; }
+    public string? ClosedByName { get; set; }
+
+    public string? ActiveTechnicianName { get; set; }
+    public bool IsOverdue { get; set; }
+    public bool CanBeClosed { get; set; }
+}
+
+public class FaultReportEventDto
+{
+    public int Id { get; set; }
+    public string EventType { get; set; } = string.Empty;
+    public string? OldValue { get; set; }
+    public string? NewValue { get; set; }
+    public DateTime ChangedAt { get; set; }
+}
