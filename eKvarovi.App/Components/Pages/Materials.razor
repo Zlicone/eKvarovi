@@ -1,5 +1,193 @@
-﻿<h3>Materials</h3>
+﻿@page "/materials"
+@rendermode InteractiveServer
+@using eKvarovi.Shared.Dtos
+@using eKvarovi.App.Services
+@using eKvarovi.App.Components.Dialogs
+@inject MaterialService MaterialService
+@inject LookupService LookupService
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<PageTitle>Materijali</PageTitle>
+
+<MudText Typo="Typo.h4" Class="mb-4">Materijali</MudText>
+
+<MudPaper Class="pa-4 mb-4">
+    <MudGrid>
+        <MudItem xs="12" md="5">
+            <MudTextField @bind-Value="_search"
+                          Label="Pretraga"
+                          Placeholder="Naziv materijala"
+                          Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Filled.Search"
+                          Immediate="true"
+                          DebounceInterval="400"
+                          OnDebounceIntervalElapsed="LoadData" />
+        </MudItem>
+
+        <MudItem xs="12" sm="6" md="3">
+            <MudSelect T="int?" Value="_unitId"
+                       ValueChanged="@(async v => { _unitId = v; await LoadData(); })"
+                       Label="Mjerna jedinica" Clearable="true">
+                @foreach (var u in _units)
+                {
+                    <MudSelectItem T="int?" Value="@((int?)u.Id)">@u.Name</MudSelectItem>
+                }
+            </MudSelect>
+        </MudItem>
+
+        <MudItem xs="12" sm="6" md="2">
+            <MudSelect T="bool?" Value="_isActive"
+                       ValueChanged="@(async v => { _isActive = v; await LoadData(); })"
+                       Label="Status" Clearable="true">
+                <MudSelectItem T="bool?" Value="@((bool?)true)">U upotrebi</MudSelectItem>
+                <MudSelectItem T="bool?" Value="@((bool?)false)">Povučeni</MudSelectItem>
+            </MudSelect>
+        </MudItem>
+
+        <MudItem xs="12" md="2" Class="d-flex align-center">
+            <MudButton Variant="Variant.Outlined"
+                       StartIcon="@Icons.Material.Filled.Refresh"
+                       OnClick="ResetFilters" FullWidth="true">
+                Poništi
+            </MudButton>
+        </MudItem>
+    </MudGrid>
+</MudPaper>
+
+<MudPaper Class="pa-4">
+    <div class="d-flex justify-space-between align-center mb-3">
+        <MudText Typo="Typo.h6">Pronađeno: @_items.Count</MudText>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                   StartIcon="@Icons.Material.Filled.Add"
+                   OnClick="OpenCreate">
+            Novi materijal
+        </MudButton>
+    </div>
+
+    <MudTable Items="_items" Loading="_loading" Hover="true" Striped="true" Dense="true"
+              Breakpoint="Breakpoint.Sm"
+              NoRecordsText="Nema materijala koji odgovaraju filterima.">
+        <HeaderContent>
+            <MudTh>Naziv</MudTh>
+            <MudTh>Mjerna jedinica</MudTh>
+            <MudTh>Evidentiran na intervencijama</MudTh>
+            <MudTh>Status</MudTh>
+            <MudTh>Akcije</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Naziv">@context.Name</MudTd>
+            <MudTd DataLabel="Mjerna jedinica">@context.UnitName (@context.UnitAbbreviation)</MudTd>
+            <MudTd DataLabel="Evidentiran na intervencijama">@context.UsageCount</MudTd>
+            <MudTd DataLabel="Status">
+                <MudChip T="string" Size="Size.Small"
+                         Color="@(context.IsActive ? Color.Success : Color.Default)">
+                    @(context.IsActive ? "U upotrebi" : "Povučen")
+                </MudChip>
+            </MudTd>
+            <MudTd DataLabel="Akcije">
+                <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small"
+                               Color="Color.Primary"
+                               OnClick="@(() => OpenEdit(context))" />
+                <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small"
+                               Color="Color.Error"
+                               OnClick="@(() => ConfirmDelete(context))" />
+            </MudTd>
+        </RowTemplate>
+        <PagerContent>
+            <MudTablePager RowsPerPageString="Redova po stranici:" />
+        </PagerContent>
+    </MudTable>
+</MudPaper>
 
 @code {
+    private List<MaterialDto> _items = new();
+    private List<LookupDto> _units = new();
 
+    private string? _search;
+    private int? _unitId;
+    private bool? _isActive;
+    private bool _loading;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _units = await LookupService.GetMaterialUnitsAsync();
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        _loading = true;
+        _items = await MaterialService.GetAllAsync(_search, _unitId, _isActive);
+        _loading = false;
+    }
+
+    private async Task ResetFilters()
+    {
+        _search = null;
+        _unitId = null;
+        _isActive = null;
+        await LoadData();
+    }
+
+    private async Task OpenCreate()
+    {
+        var parameters = new DialogParameters<MaterialDialog>
+        {
+            { x => x.Units, _units }
+        };
+
+        var dialog = await DialogService.ShowAsync<MaterialDialog>("Novi materijal", parameters);
+        var result = await dialog.Result;
+
+        if (result is not null && !result.Canceled)
+        {
+            Snackbar.Add("Materijal je dodan.", Severity.Success);
+            await LoadData();
+        }
+    }
+
+    private async Task OpenEdit(MaterialDto item)
+    {
+        var parameters = new DialogParameters<MaterialDialog>
+        {
+            { x => x.Existing, item },
+            { x => x.Units, _units }
+        };
+
+        var dialog = await DialogService.ShowAsync<MaterialDialog>("Izmjena materijala", parameters);
+        var result = await dialog.Result;
+
+        if (result is not null && !result.Canceled)
+        {
+            Snackbar.Add("Materijal je izmijenjen.", Severity.Success);
+            await LoadData();
+        }
+    }
+
+    private async Task ConfirmDelete(MaterialDto item)
+    {
+        var parameters = new DialogParameters<ConfirmDialog>
+        {
+            { x => x.Message, $"Obrisati materijal \"{item.Name}\"? Radnja je nepovratna." },
+            { x => x.ConfirmText, "Obriši" }
+        };
+
+        var dialog = await DialogService.ShowAsync<ConfirmDialog>("Potvrda brisanja", parameters);
+        var result = await dialog.Result;
+
+        if (result is null || result.Canceled) return;
+
+        var (success, error) = await MaterialService.DeleteAsync(item.Id);
+
+        if (success)
+        {
+            Snackbar.Add("Materijal je obrisan.", Severity.Success);
+            await LoadData();
+        }
+        else
+        {
+            Snackbar.Add(error ?? "Brisanje nije uspjelo.", Severity.Error);
+        }
+    }
 }

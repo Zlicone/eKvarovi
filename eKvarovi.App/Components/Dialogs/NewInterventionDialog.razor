@@ -1,0 +1,70 @@
+﻿@using eKvarovi.Shared.Dtos
+@using eKvarovi.App.Services
+@inject InterventionService InterventionService
+
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="_form" Model="_model">
+            <MudSelect T="int" @bind-Value="_model.FaultAssignmentId"
+                       Label="Radni nalog *"
+                       Validation="@(new Func<int, string?>(v => v <= 0 ? "Radni nalog je obavezan." : null))"
+                       Class="mb-3">
+                @foreach (var a in Assignments)
+                {
+                    <MudSelectItem T="int" Value="@a.Id">
+                        @a.FaultReportTitle — @a.TechnicianName
+                    </MudSelectItem>
+                }
+            </MudSelect>
+
+            <MudTextField @bind-Value="_model.Note"
+                          Label="Početna bilješka"
+                          Lines="3"
+                          MaxLength="2000" />
+        </MudForm>
+
+        @if (!string.IsNullOrWhiteSpace(_error))
+        {
+            <MudAlert Severity="Severity.Error" Class="mt-3">@_error</MudAlert>
+        }
+    </DialogContent>
+
+    <DialogActions>
+        <MudButton OnClick="Cancel">Odustani</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Save" Disabled="_saving">
+            @(_saving ? "Spremanje..." : "Otvori intervenciju")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter] public List<AssignmentDto> Assignments { get; set; } = new();
+
+    private MudForm _form = default!;
+    private InterventionCreateDto _model = new();
+    private bool _saving;
+    private string? _error;
+
+    private async Task Save()
+    {
+        await _form.Validate();
+        if (!_form.IsValid) return;
+
+        _saving = true;
+        _error = null;
+
+        var result = await InterventionService.CreateAsync(_model);
+
+        _saving = false;
+
+        if (result.Success)
+            MudDialog.Close(DialogResult.Ok(true));
+        else
+            _error = result.Error;
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}

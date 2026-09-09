@@ -1,0 +1,180 @@
+﻿@using eKvarovi.Shared.Dtos
+@using eKvarovi.App.Services
+@inject InterventionService InterventionService
+
+<MudDialog>
+    <DialogContent>
+        <MudText Typo="Typo.subtitle2" Class="mb-1">@Intervention.FaultReportTitle</MudText>
+        <MudText Typo="Typo.caption" Class="mb-4">
+            @Intervention.LocationName — izvršitelj @Intervention.TechnicianName
+        </MudText>
+
+        <MudForm @ref="_form" Model="_model">
+            <MudSelect T="int" Value="_model.StatusId"
+                       ValueChanged="OnStatusChanged"
+                       Label="Status intervencije *"
+                       Validation="@(new Func<int, string?>(v => v <= 0 ? "Status je obavezan." : null))"
+                       Class="mb-3">
+                @foreach (var s in Statuses)
+                {
+                    <MudSelectItem T="int" Value="@s.Id">@s.Name</MudSelectItem>
+                }
+            </MudSelect>
+
+            <MudGrid Class="mb-3">
+                <MudItem xs="12" sm="6">
+                    <MudDatePicker @bind-Date="_startDate"
+                                   Label="@($"Datum početka{(NeedsTimes ? " *" : "")}")"
+                                   Clearable="true" />
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudTimePicker @bind-Time="_startTime"
+                                   Label="Vrijeme početka"
+                                   Clearable="true" />
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudDatePicker @bind-Date="_endDate"
+                                   Label="@($"Datum završetka{(NeedsEnd ? " *" : "")}")"
+                                   Clearable="true" />
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudTimePicker @bind-Time="_endTime"
+                                   Label="Vrijeme završetka"
+                                   Clearable="true" />
+                </MudItem>
+            </MudGrid>
+
+            <MudTextField @bind-Value="_model.Note"
+                          Label="@($"Bilješka o radovima{(NeedsNote ? " *" : "")}")"
+                          Lines="4"
+                          MaxLength="2000" />
+        </MudForm>
+
+        @if (NeedsNote)
+        {
+            <MudAlert Severity="Severity.Info" Dense="true" Class="mt-3">
+                @(SelectedCode == "ZAVRSENA"
+                    ? "Završena intervencija mora imati početak, završetak i bilješku o izvedenim radovima."
+                    : "Neuspješna intervencija mora imati bilješku s razlogom.")
+            </MudAlert>
+        }
+
+        @if (!string.IsNullOrWhiteSpace(_error))
+        {
+            <MudAlert Severity="Severity.Error" Class="mt-3">@_error</MudAlert>
+        }
+    </DialogContent>
+
+    <DialogActions>
+        <MudButton OnClick="Cancel">Odustani</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Save" Disabled="_saving">
+            @(_saving ? "Spremanje..." : "Spremi")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter] public InterventionDto Intervention { get; set; } = default!;
+    [Parameter] public List<LookupDto> Statuses { get; set; } = new();
+
+    private MudForm _form = default!;
+    private InterventionUpdateDto _model = new();
+
+    private DateTime? _startDate;
+    private TimeSpan? _startTime;
+    private DateTime? _endDate;
+    private TimeSpan? _endTime;
+
+    private bool _saving;
+    private string? _error;
+
+    private string SelectedCode
+    {
+        get
+        {
+            var name = Statuses.FirstOrDefault(s => s.Id == _model.StatusId)?.Name;
+            return name switch
+            {
+                "Planirana" => "PLANIRANA",
+                "U tijeku" => "U_TIJEKU",
+                "Završena" => "ZAVRSENA",
+                "Neuspješna" => "NEUSPJESNA",
+                _ => ""
+            };
+        }
+    }
+
+    private bool NeedsTimes => SelectedCode is "U_TIJEKU" or "ZAVRSENA";
+    private bool NeedsEnd => SelectedCode == "ZAVRSENA";
+    private bool NeedsNote => SelectedCode is "ZAVRSENA" or "NEUSPJESNA";
+
+    protected override void OnInitialized()
+    {
+        _model.StatusId = Intervention.StatusId;
+        _model.Note = Intervention.Note;
+
+        if (Intervention.StartedAt is not null)
+        {
+            var local = Intervention.StartedAt.Value.ToLocalTime();
+            _startDate = local.Date;
+            _startTime = local.TimeOfDay;
+        }
+
+        if (Intervention.FinishedAt is not null)
+        {
+            var local = Intervention.FinishedAt.Value.ToLocalTime();
+            _endDate = local.Date;
+            _endTime = local.TimeOfDay;
+        }
+    }
+
+    private void OnStatusChanged(int value)
+    {
+        _model.StatusId = value;
+
+        if (SelectedCode is "U_TIJEKU" or "ZAVRSENA" && _startDate is null)
+        {
+            _startDate = DateTime.Today;
+            _startTime = DateTime.Now.TimeOfDay;
+        }
+
+        if (SelectedCode == "ZAVRSENA" && _endDate is null)
+        {
+            _endDate = DateTime.Today;
+            _endTime = DateTime.Now.TimeOfDay;
+        }
+    }
+
+    private static DateTime? Combine(DateTime? date, TimeSpan? time)
+    {
+        if (date is null) return null;
+        return DateTime.SpecifyKind(date.Value.Date + (time ?? TimeSpan.Zero), DateTimeKind.Local)
+                       .ToUniversalTime();
+    }
+
+    private async Task Save()
+    {
+        await _form.Validate();
+        if (!_form.IsValid) return;
+
+        _model.StartedAt = Combine(_startDate, _startTime);
+        _model.FinishedAt = Combine(_endDate, _endTime);
+
+        _saving = true;
+        _error = null;
+
+        var result = await InterventionService.UpdateAsync(Intervention.Id, _model);
+
+        _saving = false;
+
+        if (result.Success)
+            MudDialog.Close(DialogResult.Ok(true));
+        else
+            _error = result.Error;
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}

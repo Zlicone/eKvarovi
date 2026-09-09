@@ -1,5 +1,235 @@
-﻿<h3>Interventions</h3>
+﻿@page "/interventions"
+@rendermode InteractiveServer
+@using eKvarovi.Shared.Dtos
+@using eKvarovi.App.Services
+@using eKvarovi.App.Components.Dialogs
+@inject InterventionService InterventionService
+@inject AssignmentService AssignmentService
+@inject MaterialService MaterialService
+@inject EmployeeService EmployeeService
+@inject LookupService LookupService
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@inject NavigationManager Nav
+
+<PageTitle>Intervencije</PageTitle>
+
+<MudText Typo="Typo.h4" Class="mb-4">Intervencije</MudText>
+
+<MudPaper Class="pa-4 mb-4">
+    <MudGrid>
+        <MudItem xs="12" md="4">
+            <MudTextField @bind-Value="_search"
+                          Label="Pretraga"
+                          Placeholder="Naslov prijave ili bilješka"
+                          Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Filled.Search"
+                          Immediate="true"
+                          DebounceInterval="400"
+                          OnDebounceIntervalElapsed="LoadData" />
+        </MudItem>
+
+        <MudItem xs="12" sm="6" md="3">
+            <MudSelect T="int?" Value="_statusId"
+                       ValueChanged="@(async v => { _statusId = v; await LoadData(); })"
+                       Label="Status" Clearable="true">
+                @foreach (var s in _statuses)
+                {
+                    <MudSelectItem T="int?" Value="@((int?)s.Id)">@s.Name</MudSelectItem>
+                }
+            </MudSelect>
+        </MudItem>
+
+        <MudItem xs="12" sm="6" md="3">
+            <MudSelect T="int?" Value="_technicianId"
+                       ValueChanged="@(async v => { _technicianId = v; await LoadData(); })"
+                       Label="Izvršitelj" Clearable="true">
+                @foreach (var e in _employees)
+                {
+                    <MudSelectItem T="int?" Value="@((int?)e.Id)">@e.FullName</MudSelectItem>
+                }
+            </MudSelect>
+        </MudItem>
+
+        <MudItem xs="12" md="2" Class="d-flex align-center">
+            <MudButton Variant="Variant.Outlined"
+                       StartIcon="@Icons.Material.Filled.Refresh"
+                       OnClick="ResetFilters" FullWidth="true">
+                Poništi
+            </MudButton>
+        </MudItem>
+    </MudGrid>
+</MudPaper>
+
+<MudPaper Class="pa-4">
+    <div class="d-flex justify-space-between align-center mb-3">
+        <MudText Typo="Typo.h6">Pronađeno: @_items.Count</MudText>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                   StartIcon="@Icons.Material.Filled.Add"
+                   OnClick="OpenCreate">
+            Nova intervencija
+        </MudButton>
+    </div>
+
+    <MudTable Items="_items" Loading="_loading" Hover="true" Striped="true" Dense="true"
+              Breakpoint="Breakpoint.Sm"
+              NoRecordsText="Nema intervencija koje odgovaraju filterima.">
+        <HeaderContent>
+            <MudTh>Prijava</MudTh>
+            <MudTh>Lokacija</MudTh>
+            <MudTh>Izvršitelj</MudTh>
+            <MudTh>Status</MudTh>
+            <MudTh>Početak</MudTh>
+            <MudTh>Trajanje</MudTh>
+            <MudTh>Materijali</MudTh>
+            <MudTh>Akcije</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Prijava">
+                <MudLink Href="@($"/faultreports/{context.FaultReportId}")">
+                    @context.FaultReportTitle
+                </MudLink>
+            </MudTd>
+            <MudTd DataLabel="Lokacija">@context.LocationName</MudTd>
+            <MudTd DataLabel="Izvršitelj">@context.TechnicianName</MudTd>
+            <MudTd DataLabel="Status">
+                <MudChip T="string" Size="Size.Small" Color="@StatusColor(context.StatusCode)">
+                    @context.StatusName
+                </MudChip>
+            </MudTd>
+            <MudTd DataLabel="Početak">
+                @(context.StartedAt is null
+                    ? "—"
+                    : context.StartedAt.Value.ToLocalTime().ToString("dd.MM.yyyy. HH:mm"))
+            </MudTd>
+            <MudTd DataLabel="Trajanje">
+                @(context.DurationMinutes is null ? "—" : FormatDuration(context.DurationMinutes.Value))
+            </MudTd>
+            <MudTd DataLabel="Materijali">@context.MaterialCount</MudTd>
+            <MudTd DataLabel="Akcije">
+                <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small"
+                               Color="Color.Primary"
+                               Title="Uredi intervenciju"
+                               Disabled="!context.IsEditable"
+                               OnClick="@(() => OpenEdit(context))" />
+                <MudIconButton Icon="@Icons.Material.Filled.Inventory" Size="Size.Small"
+                               Color="Color.Default"
+                               Title="Utrošak materijala"
+                               OnClick="@(() => OpenMaterials(context))" />
+            </MudTd>
+        </RowTemplate>
+        <PagerContent>
+            <MudTablePager RowsPerPageString="Redova po stranici:" />
+        </PagerContent>
+    </MudTable>
+</MudPaper>
 
 @code {
+    private List<InterventionDto> _items = new();
+    private List<LookupDto> _statuses = new();
+    private List<EmployeeDto> _employees = new();
+    private List<MaterialDto> _materials = new();
+    private List<AssignmentDto> _activeAssignments = new();
 
+    private string? _search;
+    private int? _statusId;
+    private int? _technicianId;
+    private bool _loading;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _statuses = await LookupService.GetInterventionStatusesAsync();
+        _employees = await EmployeeService.GetAllAsync(isActive: true);
+        _materials = await MaterialService.GetAllAsync(isActive: true);
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        _loading = true;
+        _items = await InterventionService.GetAllAsync(
+            technicianId: _technicianId,
+            statusId: _statusId,
+            search: _search);
+        _loading = false;
+    }
+
+    private async Task ResetFilters()
+    {
+        _search = null;
+        _statusId = null;
+        _technicianId = null;
+        await LoadData();
+    }
+
+    private static string FormatDuration(int minutes)
+    {
+        var h = minutes / 60;
+        var m = minutes % 60;
+        return h > 0 ? $"{h} h {m} min" : $"{m} min";
+    }
+
+    private static Color StatusColor(string code) => code switch
+    {
+        "PLANIRANA" => Color.Default,
+        "U_TIJEKU" => Color.Warning,
+        "ZAVRSENA" => Color.Success,
+        "NEUSPJESNA" => Color.Error,
+        _ => Color.Default
+    };
+
+    private async Task OpenCreate()
+    {
+        _activeAssignments = await AssignmentService.GetAllAsync(activeOnly: true);
+
+        if (_activeAssignments.Count == 0)
+        {
+            Snackbar.Add("Nema aktivnih radnih naloga. Prvo dodijelite prijavu izvršitelju.", Severity.Warning);
+            return;
+        }
+
+        var parameters = new DialogParameters<NewInterventionDialog>
+        {
+            { x => x.Assignments, _activeAssignments }
+        };
+
+        var dialog = await DialogService.ShowAsync<NewInterventionDialog>("Nova intervencija", parameters);
+        var result = await dialog.Result;
+
+        if (result is not null && !result.Canceled)
+        {
+            Snackbar.Add("Intervencija je otvorena.", Severity.Success);
+            await LoadData();
+        }
+    }
+
+    private async Task OpenEdit(InterventionDto item)
+    {
+        var parameters = new DialogParameters<InterventionDialog>
+        {
+            { x => x.Intervention, item },
+            { x => x.Statuses, _statuses }
+        };
+
+        var dialog = await DialogService.ShowAsync<InterventionDialog>("Uređivanje intervencije", parameters);
+        var result = await dialog.Result;
+
+        if (result is not null && !result.Canceled)
+        {
+            Snackbar.Add("Intervencija je spremljena.", Severity.Success);
+            await LoadData();
+        }
+    }
+
+    private async Task OpenMaterials(InterventionDto item)
+    {
+        var parameters = new DialogParameters<MaterialUsageDialog>
+        {
+            { x => x.Intervention, item },
+            { x => x.Materials, _materials }
+        };
+
+        await DialogService.ShowAsync<MaterialUsageDialog>("Utrošak materijala", parameters);
+        await LoadData();
+    }
 }

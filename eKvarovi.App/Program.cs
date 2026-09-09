@@ -19,6 +19,8 @@ builder.Services.AddScoped<LocationService>();
 builder.Services.AddScoped<EmployeeService>();
 builder.Services.AddScoped<FaultReportService>();
 builder.Services.AddScoped<AssignmentService>();
+builder.Services.AddScoped<InterventionService>();
+builder.Services.AddScoped<MaterialService>();
 
 var app = builder.Build();
 

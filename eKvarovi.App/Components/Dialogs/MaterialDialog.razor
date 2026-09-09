@@ -1,0 +1,119 @@
+﻿@using eKvarovi.Shared.Dtos
+@using eKvarovi.App.Services
+@inject MaterialService MaterialService
+
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="_form" Model="_model">
+            <MudTextField @bind-Value="_model.Name"
+                          Label="Naziv materijala *"
+                          Required="true"
+                          RequiredError="Naziv je obavezan."
+                          MaxLength="150"
+                          Class="mb-3" />
+
+            <MudSelect T="int" @bind-Value="_model.UnitId"
+                       Label="Mjerna jedinica *"
+                       Validation="@(new Func<int, string?>(v => v <= 0 ? "Mjerna jedinica je obavezna." : null))"
+                       Disabled="_unitLocked"
+                       Class="mb-3">
+                @foreach (var u in Units)
+                {
+                    <MudSelectItem T="int" Value="@u.Id">@u.Name</MudSelectItem>
+                }
+            </MudSelect>
+
+            @if (_unitLocked)
+            {
+                <MudAlert Severity="Severity.Info" Dense="true" Class="mb-3">
+                    Mjernu jedinicu nije moguće mijenjati jer je materijal već evidentiran na intervencijama.
+                </MudAlert>
+            }
+
+            @if (IsEdit)
+            {
+                <MudSwitch T="bool" @bind-Value="_isActive"
+                           Label="Materijal je u upotrebi"
+                           Color="Color.Primary" />
+            }
+        </MudForm>
+
+        @if (!string.IsNullOrWhiteSpace(_error))
+        {
+            <MudAlert Severity="Severity.Error" Class="mt-3">@_error</MudAlert>
+        }
+    </DialogContent>
+
+    <DialogActions>
+        <MudButton OnClick="Cancel">Odustani</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Save" Disabled="_saving">
+            @(_saving ? "Spremanje..." : "Spremi")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter] public MaterialDto? Existing { get; set; }
+    [Parameter] public List<LookupDto> Units { get; set; } = new();
+
+    private MudForm _form = default!;
+    private MaterialUpdateDto _model = new();
+    private bool _isActive = true;
+    private bool _unitLocked;
+    private bool _saving;
+    private string? _error;
+
+    private bool IsEdit => Existing is not null;
+
+    protected override void OnInitialized()
+    {
+        if (Existing is not null)
+        {
+            _model = new MaterialUpdateDto
+            {
+                Name = Existing.Name,
+                UnitId = Existing.UnitId,
+                IsActive = Existing.IsActive
+            };
+            _isActive = Existing.IsActive;
+            _unitLocked = Existing.UsageCount > 0;
+        }
+    }
+
+    private async Task Save()
+    {
+        await _form.Validate();
+        if (!_form.IsValid) return;
+
+        _saving = true;
+        _error = null;
+
+        (bool Success, string? Error) result;
+
+        if (IsEdit)
+        {
+            _model.IsActive = _isActive;
+            result = await MaterialService.UpdateAsync(Existing!.Id, _model);
+        }
+        else
+        {
+            result = await MaterialService.CreateAsync(new MaterialCreateDto
+            {
+                Name = _model.Name,
+                UnitId = _model.UnitId
+            });
+        }
+
+        _saving = false;
+
+        if (result.Success)
+            MudDialog.Close(DialogResult.Ok(true));
+        else
+            _error = result.Error;
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}
