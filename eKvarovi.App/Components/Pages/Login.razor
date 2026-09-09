@@ -1,5 +1,110 @@
-﻿<h3>Login</h3>
+﻿@page "/login"
+@rendermode InteractiveServer
+@layout EmptyLayout
+@using eKvarovi.Shared.Dtos
+@using eKvarovi.App.Services
+@using eKvarovi.App.Components.Layout
+@using Microsoft.AspNetCore.Components.Web
+@inject AuthService AuthService
+@inject CurrentUserService CurrentUser
+@inject NavigationManager Nav
+
+<PageTitle>Prijava</PageTitle>
+
+<div class="d-flex justify-center align-center" style="min-height: 100vh;">
+    <MudPaper Class="pa-8" Elevation="4" Style="width: 100%; max-width: 420px;">
+        <div class="d-flex flex-column align-center mb-6">
+            <MudIcon Icon="@Icons.Material.Filled.Build" Color="Color.Primary" Size="Size.Large" />
+            <MudText Typo="Typo.h5" Class="mt-2">e-Kvarovi Županije</MudText>
+            <MudText Typo="Typo.body2">Prijava i obrada kvarova</MudText>
+        </div>
+
+        <MudForm @ref="_form" Model="_model">
+            <MudTextField @bind-Value="_model.Username"
+                          Label="Korisničko ime"
+                          Required="true"
+                          RequiredError="Korisničko ime je obavezno."
+                          Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Filled.Person"
+                          Class="mb-4"
+                          OnKeyDown="OnKeyDown" />
+
+            <MudTextField @bind-Value="_model.Password"
+                          Label="Lozinka"
+                          InputType="@(_showPassword ? InputType.Text : InputType.Password)"
+                          Required="true"
+                          RequiredError="Lozinka je obavezna."
+                          Adornment="Adornment.End"
+                          AdornmentIcon="@(_showPassword ? Icons.Material.Filled.VisibilityOff : Icons.Material.Filled.Visibility)"
+                          OnAdornmentClick="@(() => _showPassword = !_showPassword)"
+                          AdornmentAriaLabel="Prikaži lozinku"
+                          Class="mb-4"
+                          OnKeyDown="OnKeyDown" />
+        </MudForm>
+
+        @if (!string.IsNullOrWhiteSpace(_error))
+        {
+            <MudAlert Severity="Severity.Error" Dense="true" Class="mb-4">@_error</MudAlert>
+        }
+
+        <MudButton Variant="Variant.Filled"
+                   Color="Color.Primary"
+                   FullWidth="true"
+                   Size="Size.Large"
+                   OnClick="DoLogin"
+                   Disabled="_busy">
+            @(_busy ? "Prijava..." : "Prijavi se")
+        </MudButton>
+
+        <MudDivider Class="my-4" />
+
+        <MudText Typo="Typo.caption">Demo računi (lozinka <b>Demo1234!</b>):</MudText>
+        <MudText Typo="Typo.caption" Class="d-block">admin · upravitelj · izvrsitelj · prijavitelj</MudText>
+    </MudPaper>
+</div>
 
 @code {
+    private MudForm _form = default!;
+    private LoginDto _model = new();
+    private bool _busy;
+    private bool _showPassword;
+    private string? _error;
 
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        await CurrentUser.InitializeAsync();
+
+        if (CurrentUser.IsLoggedIn)
+            Nav.NavigateTo("/", replace: true);
+    }
+
+    private async Task OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+            await DoLogin();
+    }
+
+    private async Task DoLogin()
+    {
+        await _form.Validate();
+        if (!_form.IsValid) return;
+
+        _busy = true;
+        _error = null;
+
+        var (result, error) = await AuthService.LoginAsync(_model);
+
+        if (result is not null)
+        {
+            await CurrentUser.LoginAsync(result);
+            Nav.NavigateTo("/", replace: true);
+        }
+        else
+        {
+            _error = error;
+            _busy = false;
+        }
+    }
 }

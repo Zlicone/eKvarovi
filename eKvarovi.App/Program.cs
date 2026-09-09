@@ -1,6 +1,7 @@
 using eKvarovi.App.Components;
 using eKvarovi.App.Services;
 using MudBlazor.Services;
+using Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -22,6 +23,9 @@ builder.Services.AddScoped<AssignmentService>();
 builder.Services.AddScoped<InterventionService>();
 builder.Services.AddScoped<MaterialService>();
 builder.Services.AddScoped<AttachmentService>();
+builder.Services.AddScoped<ProtectedLocalStorage>();
+builder.Services.AddScoped<AuthService>();
+builder.Services.AddScoped<CurrentUserService>();
 
 var app = builder.Build();
 

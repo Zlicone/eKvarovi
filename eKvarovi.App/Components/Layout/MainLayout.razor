@@ -1,4 +1,8 @@
 ﻿@inherits LayoutComponentBase
+@using eKvarovi.App.Services
+@inject CurrentUserService CurrentUser
+@inject NavigationManager Nav
+@implements IDisposable
 
 <MudThemeProvider />
 <MudPopoverProvider />
@@ -9,7 +13,20 @@
     <MudAppBar Elevation="1" Color="Color.Primary">
         <MudText Typo="Typo.h6">e-Kvarovi Županije</MudText>
         <MudSpacer />
-        <MudText Typo="Typo.body2">Prijava i obrada kvarova</MudText>
+
+        @if (CurrentUser.IsLoggedIn)
+        {
+            <MudText Typo="Typo.body2" Class="mr-3 d-none d-sm-flex">
+                @(CurrentUser.User!.EmployeeName ?? CurrentUser.User.Username)
+                (@string.Join(", ", CurrentUser.User.Roles))
+            </MudText>
+
+            <MudButton Color="Color.Inherit"
+                       StartIcon="@Icons.Material.Filled.Logout"
+                       OnClick="Logout">
+                Odjava
+            </MudButton>
+        }
     </MudAppBar>
 
     <MudDrawer Open="true" Elevation="1" Variant="DrawerVariant.Responsive" ClipMode="DrawerClipMode.Always">
@@ -20,3 +37,33 @@
         @Body
     </MudMainContent>
 </MudLayout>
+
+@code {
+    protected override void OnInitialized()
+    {
+        CurrentUser.Changed += OnChanged;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        await CurrentUser.InitializeAsync();
+
+        if (!CurrentUser.IsLoggedIn)
+            Nav.NavigateTo("/login", replace: true);
+    }
+
+    private void OnChanged() => InvokeAsync(StateHasChanged);
+
+    private async Task Logout()
+    {
+        await CurrentUser.LogoutAsync();
+        Nav.NavigateTo("/login", replace: true);
+    }
+
+    public void Dispose()
+    {
+        CurrentUser.Changed -= OnChanged;
+    }
+}
