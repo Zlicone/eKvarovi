@@ -361,3 +361,6 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+
+eKvarovi.Api/wwwroot/uploads/*
+!eKvarovi.Api/wwwroot/uploads/.gitkeep

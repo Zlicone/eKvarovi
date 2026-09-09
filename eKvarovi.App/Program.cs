@@ -21,6 +21,7 @@ builder.Services.AddScoped<FaultReportService>();
 builder.Services.AddScoped<AssignmentService>();
 builder.Services.AddScoped<InterventionService>();
 builder.Services.AddScoped<MaterialService>();
+builder.Services.AddScoped<AttachmentService>();
 
 var app = builder.Build();
 

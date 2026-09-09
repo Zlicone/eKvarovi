@@ -1,0 +1,199 @@
+﻿@using eKvarovi.Shared.Dtos
+@using eKvarovi.App.Services
+@using eKvarovi.App.Components.Dialogs
+@inject AttachmentService AttachmentService
+@inject LookupService LookupService
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<MudPaper Class="pa-4">
+    <div class="d-flex justify-space-between align-center mb-3">
+        <MudText Typo="Typo.h6">Privitci (@_items.Count)</MudText>
+    </div>
+
+    @if (!ReadOnly)
+    {
+        <MudPaper Class="pa-3 mb-4" Elevation="0" Style="background: var(--mud-palette-background-grey);">
+            <MudGrid>
+                <MudItem xs="12" sm="5">
+                    <MudSelect T="int" @bind-Value="_purposeId" Label="Namjena" Dense="true">
+                        @foreach (var p in _purposes)
+                        {
+                            <MudSelectItem T="int" Value="@p.Id">@p.Name</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12" sm="7">
+                    <MudFileUpload T="IBrowserFile" FilesChanged="OnFileSelected" Accept=".jpg,.jpeg,.png,.webp,.pdf">
+                        <ActivatorContent>
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                                       StartIcon="@Icons.Material.Filled.CloudUpload"
+                                       Disabled="_uploading" FullWidth="true">
+                                @(_uploading ? "Prijenos..." : "Odaberi datoteku")
+                            </MudButton>
+                        </ActivatorContent>
+                    </MudFileUpload>
+                </MudItem>
+                <MudItem xs="12">
+                    <MudText Typo="Typo.caption">
+                        Dopušteni formati: JPG, PNG, WEBP, PDF. Najveća veličina 5 MB.
+                    </MudText>
+                </MudItem>
+            </MudGrid>
+        </MudPaper>
+    }
+
+    @if (_items.Count == 0)
+    {
+        <MudText Typo="Typo.body2">Još nema priloženih datoteka.</MudText>
+    }
+    else
+    {
+        @foreach (var group in _items.GroupBy(a => a.PurposeName))
+        {
+            <MudText Typo="Typo.subtitle2" Class="mt-3 mb-2">@group.Key</MudText>
+            <MudGrid>
+                @foreach (var att in group)
+                {
+                    <MudItem xs="12" sm="6" md="4">
+                        <MudCard Outlined="true">
+                            @if (att.IsImage)
+                            {
+                                <MudCardMedia Image="@($"{AttachmentService.BaseUrl}{att.Url}")" Height="140" />
+                            }
+                            else
+                            {
+                                <div class="d-flex justify-center align-center" style="height:140px;">
+                                    <MudIcon Icon="@Icons.Material.Filled.PictureAsPdf"
+                                             Color="Color.Error" Size="Size.Large" />
+                                </div>
+                            }
+                            <MudCardContent Class="pa-2">
+                                <MudText Typo="Typo.caption" Style="word-break: break-all;">
+                                    @att.OriginalFileName
+                                </MudText>
+                                <MudText Typo="Typo.caption">@FormatSize(att.SizeBytes)</MudText>
+                            </MudCardContent>
+                            <MudCardActions Class="pa-1">
+                                <MudIconButton Icon="@Icons.Material.Filled.OpenInNew" Size="Size.Small"
+                                               Href="@($"{AttachmentService.BaseUrl}{att.Url}")"
+                                               Target="_blank" />
+                                @if (!ReadOnly)
+                                {
+                                    <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small"
+                                                   Color="Color.Error"
+                                                   OnClick="@(() => ConfirmDelete(att))" />
+                                }
+                            </MudCardActions>
+                        </MudCard>
+                    </MudItem>
+                }
+            </MudGrid>
+        }
+    }
+</MudPaper>
+
+@code {
+    [Parameter] public int FaultReportId { get; set; }
+    [Parameter] public bool ReadOnly { get; set; }
+    [Parameter] public EventCallback OnChanged { get; set; }
+
+    private List<AttachmentDto> _items = new();
+    private List<LookupDto> _purposes = new();
+    private int _purposeId;
+    private bool _uploading;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _purposes = await LookupService.GetAttachmentPurposesAsync();
+        _purposeId = _purposes.FirstOrDefault()?.Id ?? 0;
+        await Load();
+    }
+
+    private async Task Load()
+    {
+        _items = await AttachmentService.GetAllAsync(faultReportId: FaultReportId);
+    }
+
+    private static string FormatSize(long bytes)
+    {
+        if (bytes < 1024) return $"{bytes} B";
+        if (bytes < 1024 * 1024) return $"{bytes / 1024.0:0.#} KB";
+        return $"{bytes / (1024.0 * 1024):0.##} MB";
+    }
+
+    private async Task OnFileSelected(IBrowserFile? file)
+    {
+        if (file is null) return;
+
+        if (_purposeId <= 0)
+        {
+            Snackbar.Add("Odaberite namjenu privitka.", Severity.Warning);
+            return;
+        }
+
+        const long maxSize = 5 * 1024 * 1024;
+
+        if (file.Size > maxSize)
+        {
+            Snackbar.Add("Datoteka je prevelika. Najveća dopuštena veličina je 5 MB.", Severity.Error);
+            return;
+        }
+
+        _uploading = true;
+
+        try
+        {
+            await using var stream = file.OpenReadStream(maxSize);
+
+            var (success, error) = await AttachmentService.UploadAsync(
+                stream, file.Name, file.ContentType, FaultReportId, _purposeId);
+
+            if (success)
+            {
+                Snackbar.Add("Datoteka je priložena.", Severity.Success);
+                await Load();
+                await OnChanged.InvokeAsync();
+            }
+            else
+            {
+                Snackbar.Add(error ?? "Prijenos nije uspio.", Severity.Error);
+            }
+        }
+        catch (Exception)
+        {
+            Snackbar.Add("Prijenos nije uspio. Provjerite veličinu i format datoteke.", Severity.Error);
+        }
+        finally
+        {
+            _uploading = false;
+        }
+    }
+
+    private async Task ConfirmDelete(AttachmentDto att)
+    {
+        var parameters = new DialogParameters<ConfirmDialog>
+        {
+            { x => x.Message, $"Obrisati privitak \"{att.OriginalFileName}\"?" },
+            { x => x.ConfirmText, "Obriši" }
+        };
+
+        var dialog = await DialogService.ShowAsync<ConfirmDialog>("Potvrda brisanja", parameters);
+        var result = await dialog.Result;
+
+        if (result is null || result.Canceled) return;
+
+        var (success, error) = await AttachmentService.DeleteAsync(att.Id);
+
+        if (success)
+        {
+            Snackbar.Add("Privitak je obrisan.", Severity.Success);
+            await Load();
+            await OnChanged.InvokeAsync();
+        }
+        else
+        {
+            Snackbar.Add(error ?? "Brisanje nije uspjelo.", Severity.Error);
+        }
+    }
+}

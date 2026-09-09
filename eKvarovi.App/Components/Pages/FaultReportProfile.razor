@@ -3,6 +3,7 @@
 @using eKvarovi.Shared.Dtos
 @using eKvarovi.App.Services
 @using eKvarovi.App.Components.Dialogs
+@using eKvarovi.App.Components.Shared
 @inject FaultReportService FaultReportService
 @inject AssignmentService AssignmentService
 @inject InterventionService InterventionService
@@ -130,6 +131,11 @@ else
                     <MudText Typo="Typo.body2" Style="white-space: pre-wrap;">@_lastNote</MudText>
                 }
             </MudPaper>
+            <div class="mt-4">
+                <AttachmentPanel FaultReportId="@_report.Id"
+                                 ReadOnly="@(_report.StatusCode == "ZATVORENO")"
+                                 OnChanged="Reload" />
+            </div>
         </MudItem>
 
         <MudItem xs="12" md="4">
