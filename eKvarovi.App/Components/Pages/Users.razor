@@ -1,5 +1,252 @@
-﻿<h3>Users</h3>
+﻿@page "/users"
+@rendermode InteractiveServer
+@using eKvarovi.Shared.Dtos
+@using eKvarovi.App.Services
+@using eKvarovi.App.Components.Dialogs
+@inject UserService UserService
+@inject EmployeeService EmployeeService
+@inject CurrentUserService CurrentUser
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<PageTitle>Korisnici</PageTitle>
+
+<MudText Typo="Typo.h4" Class="mb-4">Korisnički računi</MudText>
+
+<MudPaper Class="pa-4 mb-4">
+    <MudGrid>
+        <MudItem xs="12" md="6">
+            <MudTextField @bind-Value="_search"
+                          Label="Pretraga"
+                          Placeholder="Korisničko ime ili email"
+                          Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Filled.Search"
+                          Immediate="true"
+                          DebounceInterval="400"
+                          OnDebounceIntervalElapsed="LoadData" />
+        </MudItem>
+
+        <MudItem xs="12" sm="6" md="3">
+            <MudSelect T="bool?" Value="_isActive"
+                       ValueChanged="OnActiveChanged"
+                       Label="Status" Clearable="true">
+                <MudSelectItem T="bool?" Value="@((bool?)true)">Aktivni</MudSelectItem>
+                <MudSelectItem T="bool?" Value="@((bool?)false)">Deaktivirani</MudSelectItem>
+            </MudSelect>
+        </MudItem>
+
+        <MudItem xs="12" md="3" Class="d-flex align-center">
+            <MudButton Variant="Variant.Outlined"
+                       StartIcon="@Icons.Material.Filled.Refresh"
+                       OnClick="ResetFilters" FullWidth="true">
+                Poništi
+            </MudButton>
+        </MudItem>
+    </MudGrid>
+</MudPaper>
+
+<MudPaper Class="pa-4">
+    <div class="d-flex justify-space-between align-center mb-3">
+        <MudText Typo="Typo.h6">Pronađeno: @_items.Count</MudText>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                   StartIcon="@Icons.Material.Filled.PersonAdd"
+                   OnClick="OpenCreate">
+            Novi korisnik
+        </MudButton>
+    </div>
+
+    <MudTable Items="_items" Loading="_loading" Hover="true" Striped="true" Dense="true"
+              Breakpoint="Breakpoint.Sm"
+              NoRecordsText="Nema korisnika koji odgovaraju filterima.">
+        <HeaderContent>
+            <MudTh>Korisničko ime</MudTh>
+            <MudTh>Email</MudTh>
+            <MudTh>Zaposlenik</MudTh>
+            <MudTh>Uloge</MudTh>
+            <MudTh>Status</MudTh>
+            <MudTh>Akcije</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Korisničko ime">
+                @context.Username
+                @if (context.Id == CurrentUser.User?.Id)
+                {
+                    <MudChip T="string" Size="Size.Small" Color="Color.Info" Class="ml-1">vi</MudChip>
+                }
+            </MudTd>
+            <MudTd DataLabel="Email">@context.Email</MudTd>
+            <MudTd DataLabel="Zaposlenik">@(context.EmployeeName ?? "—")</MudTd>
+            <MudTd DataLabel="Uloge">
+                @foreach (var role in context.Roles)
+                {
+                    <MudChip T="string" Size="Size.Small" Color="@RoleColor(role)" Class="ma-1">
+                        @RoleLabel(role)
+                    </MudChip>
+                }
+            </MudTd>
+            <MudTd DataLabel="Status">
+                <MudChip T="string" Size="Size.Small"
+                         Color="@(context.IsActive ? Color.Success : Color.Default)">
+                    @(context.IsActive ? "Aktivan" : "Deaktiviran")
+                </MudChip>
+            </MudTd>
+            <MudTd DataLabel="Akcije">
+                <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small"
+                               Color="Color.Primary"
+                               Title="Uredi"
+                               OnClick="@(() => OpenEdit(context))" />
+                <MudIconButton Icon="@Icons.Material.Filled.Key" Size="Size.Small"
+                               Color="Color.Warning"
+                               Title="Postavi lozinku"
+                               OnClick="@(() => OpenPassword(context))" />
+                <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small"
+                               Color="Color.Error"
+                               Title="Obriši"
+                               Disabled="@(context.Id == CurrentUser.User?.Id)"
+                               OnClick="@(() => ConfirmDelete(context))" />
+            </MudTd>
+        </RowTemplate>
+        <PagerContent>
+            <MudTablePager RowsPerPageString="Redova po stranici:" />
+        </PagerContent>
+    </MudTable>
+</MudPaper>
 
 @code {
+    private List<AppUserDto> _items = new();
+    private List<EmployeeDto> _employees = new();
+    private List<LookupDto> _roles = new();
 
+    private string? _search;
+    private bool? _isActive;
+    private bool _loading = true;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        await CurrentUser.InitializeAsync();
+
+        _employees = await EmployeeService.GetAllAsync(isActive: true);
+        _roles = await UserService.GetRolesAsync();
+
+        await LoadData();
+        StateHasChanged();
+    }
+
+    private async Task LoadData()
+    {
+        _loading = true;
+        _items = await UserService.GetAllAsync(_search, _isActive);
+        _loading = false;
+    }
+
+    private async Task OnActiveChanged(bool? value)
+    {
+        _isActive = value;
+        await LoadData();
+    }
+
+    private async Task ResetFilters()
+    {
+        _search = null;
+        _isActive = null;
+        await LoadData();
+    }
+
+    private static string RoleLabel(string name) => name switch
+    {
+        "Admin" => "Administrator",
+        "Manager" => "Upravitelj",
+        "Technician" => "Izvršitelj",
+        "Reporter" => "Prijavitelj",
+        _ => name
+    };
+
+    private static Color RoleColor(string name) => name switch
+    {
+        "Admin" => Color.Error,
+        "Manager" => Color.Primary,
+        "Technician" => Color.Info,
+        "Reporter" => Color.Default,
+        _ => Color.Default
+    };
+
+    private async Task OpenCreate()
+    {
+        var parameters = new DialogParameters<UserDialog>
+        {
+            { x => x.Employees, _employees },
+            { x => x.Roles, _roles }
+        };
+
+        var dialog = await DialogService.ShowAsync<UserDialog>("Novi korisnik", parameters);
+        var result = await dialog.Result;
+
+        if (result is not null && !result.Canceled)
+        {
+            Snackbar.Add("Korisnik je dodan.", Severity.Success);
+            await LoadData();
+        }
+    }
+
+    private async Task OpenEdit(AppUserDto item)
+    {
+        var parameters = new DialogParameters<UserDialog>
+        {
+            { x => x.Existing, item },
+            { x => x.Employees, _employees },
+            { x => x.Roles, _roles }
+        };
+
+        var dialog = await DialogService.ShowAsync<UserDialog>($"Izmjena: {item.Username}", parameters);
+        var result = await dialog.Result;
+
+        if (result is not null && !result.Canceled)
+        {
+            Snackbar.Add("Korisnik je izmijenjen.", Severity.Success);
+            await LoadData();
+        }
+    }
+
+    private async Task OpenPassword(AppUserDto item)
+    {
+        var parameters = new DialogParameters<PasswordDialog>
+        {
+            { x => x.UserId, item.Id },
+            { x => x.Username, item.Username }
+        };
+
+        var dialog = await DialogService.ShowAsync<PasswordDialog>("Nova lozinka", parameters);
+        var result = await dialog.Result;
+
+        if (result is not null && !result.Canceled)
+            Snackbar.Add("Lozinka je postavljena.", Severity.Success);
+    }
+
+    private async Task ConfirmDelete(AppUserDto item)
+    {
+        var parameters = new DialogParameters<ConfirmDialog>
+        {
+            { x => x.Message, $"Obrisati račun \"{item.Username}\"? Radnja je nepovratna." },
+            { x => x.ConfirmText, "Obriši" }
+        };
+
+        var dialog = await DialogService.ShowAsync<ConfirmDialog>("Potvrda brisanja", parameters);
+        var result = await dialog.Result;
+
+        if (result is null || result.Canceled) return;
+
+        var (success, error) = await UserService.DeleteAsync(item.Id);
+
+        if (success)
+        {
+            Snackbar.Add("Korisnik je obrisan.", Severity.Success);
+            await LoadData();
+        }
+        else
+        {
+            Snackbar.Add(error ?? "Brisanje nije uspjelo.", Severity.Error);
+        }
+    }
 }

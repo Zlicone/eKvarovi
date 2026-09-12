@@ -1,0 +1,204 @@
+﻿@using System.ComponentModel.DataAnnotations
+@using eKvarovi.Shared.Dtos
+@using eKvarovi.App.Services
+@inject UserService UserService
+
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="_form" Model="_model">
+            @if (!IsEdit)
+            {
+                <MudTextField @bind-Value="_username"
+                              Label="Korisničko ime *"
+                              Required="true"
+                              RequiredError="Korisničko ime je obavezno."
+                              MaxLength="100"
+                              Class="mb-3" />
+            }
+            else
+            {
+                <MudTextField Value="@Existing!.Username"
+                              Label="Korisničko ime"
+                              ReadOnly="true"
+                              Disabled="true"
+                              Class="mb-3" />
+            }
+
+            <MudTextField @bind-Value="_model.Email"
+                          Label="Email *"
+                          InputType="InputType.Email"
+                          Required="true"
+                          RequiredError="Email je obavezan."
+                          Validation="@(new EmailAddressAttribute { ErrorMessage = "Email nije u ispravnom obliku." })"
+                          MaxLength="200"
+                          Class="mb-3" />
+
+            @if (!IsEdit)
+            {
+                <MudTextField @bind-Value="_password"
+                              Label="Lozinka *"
+                              InputType="InputType.Password"
+                              Required="true"
+                              RequiredError="Lozinka je obavezna."
+                              Validation="@(new Func<string, string?>(v =>
+                                                  string.IsNullOrEmpty(v) || v.Length >= 6
+                                                      ? null
+                                                      : "Lozinka mora imati najmanje 6 znakova."))"
+                              Class="mb-3" />
+            }
+
+            <MudSelect T="int?" @bind-Value="_employeeId"
+                       Label="Povezani zaposlenik"
+                       Clearable="true"
+                       Class="mb-3">
+                @foreach (var emp in Employees)
+                {
+                    <MudSelectItem T="int?" Value="@((int?)emp.Id)">
+                        @emp.FullName — @emp.LocationName
+                    </MudSelectItem>
+                }
+            </MudSelect>
+
+            <MudText Typo="Typo.caption" Class="mb-2">
+                Bez povezanog zaposlenika račun nema vlastite prijave ni naloge. Ostavite prazno za tehnički račun.
+            </MudText>
+
+            <MudText Typo="Typo.subtitle2" Class="mt-3 mb-1">Uloge *</MudText>
+            @foreach (var role in Roles)
+            {
+                <MudCheckBox T="bool"
+                             Value="@_selectedRoles.Contains(role.Id)"
+                             ValueChanged="@(v => ToggleRole(role.Id, v))"
+                             Label="@RoleLabel(role.Name)"
+                             Color="Color.Primary"
+                             Dense="true" />
+            }
+
+            @if (_selectedRoles.Count == 0)
+            {
+                <MudText Typo="Typo.caption" Color="Color.Error">
+                    Potrebno je odabrati barem jednu ulogu.
+                </MudText>
+            }
+
+            @if (IsEdit)
+            {
+                <MudDivider Class="my-3" />
+                <MudSwitch T="bool" @bind-Value="_isActive"
+                           Label="Račun je aktivan"
+                           Color="Color.Primary" />
+            }
+        </MudForm>
+
+        @if (!string.IsNullOrWhiteSpace(_error))
+        {
+            <MudAlert Severity="Severity.Error" Class="mt-3">@_error</MudAlert>
+        }
+    </DialogContent>
+
+    <DialogActions>
+        <MudButton OnClick="Cancel">Odustani</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Save" Disabled="_saving">
+            @(_saving ? "Spremanje..." : "Spremi")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter] public AppUserDto? Existing { get; set; }
+    [Parameter] public List<EmployeeDto> Employees { get; set; } = new();
+    [Parameter] public List<LookupDto> Roles { get; set; } = new();
+
+    private MudForm _form = default!;
+    private AppUserUpdateDto _model = new();
+    private string _username = string.Empty;
+    private string _password = string.Empty;
+    private int? _employeeId;
+    private bool _isActive = true;
+    private List<int> _selectedRoles = new();
+    private bool _saving;
+    private string? _error;
+
+    private bool IsEdit => Existing is not null;
+
+    protected override void OnInitialized()
+    {
+        if (Existing is not null)
+        {
+            _model.Email = Existing.Email;
+            _employeeId = Existing.EmployeeId;
+            _isActive = Existing.IsActive;
+
+            _selectedRoles = Roles
+                .Where(r => Existing.Roles.Contains(r.Name))
+                .Select(r => r.Id)
+                .ToList();
+        }
+    }
+
+    private static string RoleLabel(string name) => name switch
+    {
+        "Admin" => "Administrator",
+        "Manager" => "Upravitelj",
+        "Technician" => "Izvršitelj",
+        "Reporter" => "Prijavitelj",
+        _ => name
+    };
+
+    private void ToggleRole(int roleId, bool selected)
+    {
+        if (selected && !_selectedRoles.Contains(roleId))
+            _selectedRoles.Add(roleId);
+        else if (!selected)
+            _selectedRoles.Remove(roleId);
+    }
+
+    private async Task Save()
+    {
+        await _form.Validate();
+        if (!_form.IsValid) return;
+
+        if (_selectedRoles.Count == 0)
+        {
+            _error = "Potrebno je odabrati barem jednu ulogu.";
+            return;
+        }
+
+        _saving = true;
+        _error = null;
+
+        (bool Success, string? Error) result;
+
+        if (IsEdit)
+        {
+            _model.EmployeeId = _employeeId;
+            _model.IsActive = _isActive;
+            _model.RoleIds = _selectedRoles;
+
+            result = await UserService.UpdateAsync(Existing!.Id, _model);
+        }
+        else
+        {
+            result = await UserService.CreateAsync(new AppUserCreateDto
+            {
+                Username = _username,
+                Email = _model.Email,
+                Password = _password,
+                EmployeeId = _employeeId,
+                RoleIds = _selectedRoles
+            });
+        }
+
+        _saving = false;
+
+        if (result.Success)
+            MudDialog.Close(DialogResult.Ok(true));
+        else
+            _error = result.Error;
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}
