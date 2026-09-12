@@ -1,7 +1,7 @@
 # e-Kvarovi Županije
 
 Web aplikacija za prijavu i obradu kvarova na objektima u nadležnosti županije.
-Završni projekt kolegija .NET / Blazor.
+Završni projekt tečaja Junior Developer .NET / Blazor.
 
 Zaposlenici prijavljuju kvarove na svojim lokacijama, upravitelj ih pregledava,
 određuje vrstu i prioritet te dodjeljuje izvršitelja. Izvršitelj evidentira

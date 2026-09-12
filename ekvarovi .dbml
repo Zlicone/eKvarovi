@@ -1,0 +1,249 @@
+// =====================================================
+// e-Kvarovi Zupanije - model baze (v1)
+// Zavrsni projekt .NET / Blazor
+// =====================================================
+
+// -----------------------------------------------------
+// LOOKUP TABLICE (sifrarnici)
+// -----------------------------------------------------
+
+Table LocationTypes {
+  Id int [pk, increment]
+  Name varchar(100) [not null, unique]
+
+  Note: 'Seed: Upravna zgrada, Skola, Zdravstvena ustanova, Skladiste'
+}
+
+Table FaultTypes {
+  Id int [pk, increment]
+  Name varchar(100) [not null, unique]
+
+  Note: 'Seed: Elektrika, Voda, Grijanje, Mreza, Gradjevinski radovi, Ostalo'
+}
+
+Table FaultPriorities {
+  Id int [pk, increment]
+  Name varchar(50) [not null, unique]
+  Rank int [not null, unique]
+
+  Note: 'Seed: Nizak(1), Srednji(2), Visok(3), Kriticni(4). Rank sluzi za sortiranje po hitnosti i za pravilo "kriticna prijava mora imati rok".'
+}
+
+Table FaultStatuses {
+  Id int [pk, increment]
+  Code varchar(30) [not null, unique]
+  Name varchar(50) [not null, unique]
+  Rank int [not null]
+
+  Note: 'Seed: Zaprimljeno(1), Pregledano(2), Dodijeljeno(3), U radu(4), Rijeseno(5), Zatvoreno(6). Code koristi poslovna logika, Name se prikazuje korisniku.'
+}
+
+Table InterventionStatuses {
+  Id int [pk, increment]
+  Code varchar(30) [not null, unique]
+  Name varchar(50) [not null, unique]
+
+  Note: 'Seed: Planirana, U tijeku, Zavrsena, Neuspjesna. Zavrsena = uspjesno.'
+}
+
+Table MaterialUnits {
+  Id int [pk, increment]
+  Name varchar(50) [not null, unique]
+  Abbreviation varchar(10) [not null]
+
+  Note: 'Seed: Komad(kom), Metar(m), Litra(l), Kilogram(kg), Paket(pak)'
+}
+
+Table AttachmentPurposes {
+  Id int [pk, increment]
+  Code varchar(30) [not null, unique]
+  Name varchar(50) [not null, unique]
+
+  Note: 'Vlastiti sifrarnik (nije zadan specifikacijom). Seed: Foto prije rada, Foto nakon rada, Dokument.'
+}
+
+// -----------------------------------------------------
+// POSLOVNE TABLICE
+// -----------------------------------------------------
+
+Table Locations {
+  Id int [pk, increment]
+  Name varchar(150) [not null]
+  Address varchar(200) [not null]
+  City varchar(100) [not null]
+  LocationTypeId int [not null, ref: > LocationTypes.Id]
+  IsActive boolean [not null, default: true]
+  CreatedAt datetime [not null]
+
+  Note: 'Lokacija se ne brise fizicki nego deaktivira. Nova prijava se smije vezati samo na aktivnu lokaciju.'
+}
+
+Table Employees {
+  Id int [pk, increment]
+  FirstName varchar(100) [not null]
+  LastName varchar(100) [not null]
+  Email varchar(200) [not null, unique]
+  Phone varchar(50)
+  LocationId int [not null, ref: > Locations.Id]
+  IsActive boolean [not null, default: true]
+  CreatedAt datetime [not null]
+
+  Note: 'Jedna tablica za sve ljude. Prijavitelj ili izvrsitelj nije svojstvo tablice nego uloge na povezanom racunu.'
+}
+
+Table FaultReports {
+  Id int [pk, increment]
+  Title varchar(200) [not null]
+  Description text [not null]
+  LocationId int [not null, ref: > Locations.Id]
+  ReporterId int [not null, ref: > Employees.Id]
+  FaultTypeId int [ref: > FaultTypes.Id]
+  PriorityId int [ref: > FaultPriorities.Id]
+  StatusId int [not null, ref: > FaultStatuses.Id]
+  DueDate datetime
+  CreatedAt datetime [not null]
+  ReviewedAt datetime
+  ResolvedAt datetime
+  ClosedAt datetime
+  ClosedByEmployeeId int [ref: > Employees.Id]
+
+  Note: 'FaultTypeId i PriorityId su NULL dok upravitelj ne pregleda prijavu. Vremenske oznake omogucuju dashboard izracun prosjecnog vremena rjesavanja bez dodatne tablice.'
+
+  Indexes {
+    StatusId
+    LocationId
+    ReporterId
+    CreatedAt
+  }
+}
+
+Table FaultAssignments {
+  Id int [pk, increment]
+  FaultReportId int [not null, ref: > FaultReports.Id]
+  TechnicianId int [not null, ref: > Employees.Id]
+  AssignedByEmployeeId int [ref: > Employees.Id]
+  AssignedAt datetime [not null]
+  UnassignedAt datetime
+  Note varchar(500)
+
+  Note: 'Povijest dodjela. Aktivna dodjela je ona kojoj je UnassignedAt NULL. Ponovna dodjela ne brise prethodni redak nego mu postavlja UnassignedAt i dodaje novi. Parcijalni UNIQUE indeks nad (FaultReportId) uz uvjet UnassignedAt IS NULL osigurava najvise jednu aktivnu dodjelu po prijavi.'
+
+  Indexes {
+    (FaultReportId, UnassignedAt) [unique, note: 'partial unique: WHERE UnassignedAt IS NULL']
+    TechnicianId
+  }
+}
+
+Table Interventions {
+  Id int [pk, increment]
+  FaultAssignmentId int [not null, ref: > FaultAssignments.Id]
+  StatusId int [not null, ref: > InterventionStatuses.Id]
+  StartedAt datetime
+  FinishedAt datetime
+  DurationMinutes int
+  Note text
+  CreatedAt datetime [not null]
+
+  Note: 'Intervencija visi o dodjeli, ne o prijavi. Zato dodjela moze postojati prije prve intervencije i kasnije imati vise njih. Neuspjesna intervencija ostaje u povijesti i dopusta otvaranje nove na istoj dodjeli.'
+
+  Indexes {
+    FaultAssignmentId
+    StatusId
+  }
+}
+
+Table Materials {
+  Id int [pk, increment]
+  Name varchar(150) [not null, unique]
+  UnitId int [not null, ref: > MaterialUnits.Id]
+  IsActive boolean [not null, default: true]
+
+  Note: 'Mjerna jedinica je svojstvo materijala, ne pojedinog utroska.'
+}
+
+Table InterventionMaterials {
+  Id int [pk, increment]
+  InterventionId int [not null, ref: > Interventions.Id]
+  MaterialId int [not null, ref: > Materials.Id]
+  Quantity decimal(10,2) [not null]
+
+  Note: 'Spojna tablica M:N s podatkom. Kolicina mora biti veca od nule. UNIQUE (InterventionId, MaterialId) sprjecava dva retka za isti materijal u istoj intervenciji.'
+
+  Indexes {
+    (InterventionId, MaterialId) [unique]
+  }
+}
+
+Table FaultAttachments {
+  Id int [pk, increment]
+  FaultReportId int [not null, ref: > FaultReports.Id]
+  InterventionId int [ref: > Interventions.Id]
+  PurposeId int [not null, ref: > AttachmentPurposes.Id]
+  OriginalFileName varchar(255) [not null]
+  StoredFileName varchar(255) [not null, unique]
+  ContentType varchar(100) [not null]
+  SizeBytes bigint [not null]
+  UploadedAt datetime [not null]
+  UploadedByAppUserId int [ref: > AppUsers.Id]
+
+  Note: 'Privitak uvijek pripada prijavi, a opcionalno i konkretnoj intervenciji. StoredFileName je sigurno generirano ime na disku i razlikuje se od originalnog naziva.'
+
+  Indexes {
+    FaultReportId
+    PurposeId
+  }
+}
+
+// -----------------------------------------------------
+// KORISNICKI SLOJ
+// -----------------------------------------------------
+
+Table AppUsers {
+  Id int [pk, increment]
+  Username varchar(100) [not null, unique]
+  Email varchar(200) [not null, unique]
+  PasswordHash varchar(500) [not null]
+  EmployeeId int [unique, ref: - Employees.Id]
+  IsActive boolean [not null, default: true]
+  CreatedAt datetime [not null]
+
+  Note: 'EmployeeId je nullable jer administrator ne mora biti zaposlenik na lokaciji. UNIQUE jer jedan zaposlenik ima najvise jedan racun. Iz JWT-a se cita EmployeeId i on je izvor istine za /mine endpointe.'
+}
+
+Table AppRoles {
+  Id int [pk, increment]
+  Name varchar(50) [not null, unique]
+
+  Note: 'Seed: Admin, Manager, Technician, Reporter'
+}
+
+Table AppUserRoles {
+  AppUserId int [not null, ref: > AppUsers.Id]
+  AppRoleId int [not null, ref: > AppRoles.Id]
+
+  Note: 'Spojna tablica koja omogucuje vise uloga po racunu.'
+
+  Indexes {
+    (AppUserId, AppRoleId) [pk]
+  }
+}
+
+// -----------------------------------------------------
+// BONUS: vremenska crta promjena
+// -----------------------------------------------------
+
+Table FaultReportEvents {
+  Id int [pk, increment]
+  FaultReportId int [not null, ref: > FaultReports.Id]
+  EventType varchar(50) [not null]
+  OldValue varchar(200)
+  NewValue varchar(200)
+  ChangedByAppUserId int [ref: > AppUsers.Id]
+  ChangedAt datetime [not null]
+
+  Note: 'Bonus funkcionalnost. Biljezi promjene statusa, prioriteta i dodjela za prikaz vremenske crte na profilu prijave.'
+
+  Indexes {
+    FaultReportId
+  }
+}
