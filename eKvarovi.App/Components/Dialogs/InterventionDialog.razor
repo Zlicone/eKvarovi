@@ -21,6 +21,21 @@
                 }
             </MudSelect>
 
+            <div class="d-flex flex-wrap gap-2 mb-3">
+                <MudButton Size="Size.Small"
+                           Variant="Variant.Outlined"
+                           StartIcon="@Icons.Material.Filled.PlayArrow"
+                           OnClick="SetStartNow">
+                    Početak sada
+                </MudButton>
+                <MudButton Size="Size.Small"
+                           Variant="Variant.Outlined"
+                           StartIcon="@Icons.Material.Filled.Stop"
+                           OnClick="SetEndNow">
+                    Završetak sada
+                </MudButton>
+            </div>
+
             <MudGrid Class="mb-3">
                 <MudItem xs="12" sm="6">
                     <MudDatePicker @bind-Date="_startDate"
@@ -177,4 +192,16 @@
     }
 
     private void Cancel() => MudDialog.Cancel();
+
+    private void SetStartNow()
+    {
+        _startDate = DateTime.Today;
+        _startTime = DateTime.Now.TimeOfDay;
+    }
+
+    private void SetEndNow()
+    {
+        _endDate = DateTime.Today;
+        _endTime = DateTime.Now.TimeOfDay;
+    }
 }

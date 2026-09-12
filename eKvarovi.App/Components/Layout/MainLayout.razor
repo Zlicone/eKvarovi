@@ -6,7 +6,10 @@
 
 <MudThemeProvider />
 <MudPopoverProvider />
-<MudDialogProvider />
+<MudDialogProvider FullWidth="true"
+                   MaxWidth="MaxWidth.Small"
+                   CloseButton="true"
+                   BackdropClick="false" />
 <MudSnackbarProvider />
 
 <MudLayout>
@@ -33,7 +36,7 @@
         <NavMenu />
     </MudDrawer>
 
-    <MudMainContent Class="pa-6 mt-16">
+    <MudMainContent Class="pa-2 pa-sm-6 mt-16">
         @Body
     </MudMainContent>
 </MudLayout>

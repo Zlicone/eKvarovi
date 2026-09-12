@@ -288,6 +288,14 @@
             { x => x.ShowReporterSelect, CurrentUser.HasAnyRole("Admin", "Manager") }
         };
 
+        var options = new DialogOptions
+        {
+            FullWidth = true,
+            MaxWidth = MaxWidth.Small,
+            CloseButton = true,
+            BackdropClick = false
+        };
+
         var dialog = await DialogService.ShowAsync<FaultReportDialog>("Nova prijava kvara", parameters);
         var result = await dialog.Result;
 

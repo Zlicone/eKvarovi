@@ -12,7 +12,7 @@
 
 <PageTitle>Moje prijave</PageTitle>
 
-<div class="d-flex justify-space-between align-center mb-4">
+<div class="d-flex flex-column flex-sm-row justify-space-between align-start align-sm-center mb-4 gap-2">
     <MudText Typo="Typo.h4">Moje prijave</MudText>
     <MudButton Variant="Variant.Filled"
                Color="Color.Primary"
@@ -192,6 +192,13 @@ else
             { x => x.Locations, _activeLocations },
             { x => x.Employees, new List<EmployeeDto>() },
             { x => x.ShowReporterSelect, false }
+        };
+        var options = new DialogOptions
+        {
+            FullWidth = true,
+            MaxWidth = MaxWidth.Small,
+            CloseButton = true,
+            BackdropClick = false
         };
 
         var dialog = await DialogService.ShowAsync<FaultReportDialog>("Prijava kvara", parameters);

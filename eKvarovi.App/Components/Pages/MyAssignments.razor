@@ -225,6 +225,14 @@ else
             { x => x.Assignments, new List<AssignmentDto> { assignment } }
         };
 
+        var options = new DialogOptions
+        {
+            FullWidth = true,
+            MaxWidth = MaxWidth.Small,
+            CloseButton = true,
+            BackdropClick = false
+        };
+
         var dialog = await DialogService.ShowAsync<NewInterventionDialog>("Nova intervencija", parameters);
         var result = await dialog.Result;
 
@@ -241,6 +249,14 @@ else
         {
             { x => x.Intervention, item },
             { x => x.Statuses, _interventionStatuses }
+        };
+
+        var options = new DialogOptions
+        {
+            FullWidth = true,
+            MaxWidth = MaxWidth.Small,
+            CloseButton = true,
+            BackdropClick = false
         };
 
         var dialog = await DialogService.ShowAsync<InterventionDialog>("Uređivanje intervencije", parameters);

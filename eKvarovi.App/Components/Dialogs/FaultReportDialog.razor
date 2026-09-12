@@ -17,14 +17,16 @@
 
             @if (!IsEdit)
             {
-                <div class="d-flex align-center mb-3 gap-2">
+                <div class="d-flex flex-column flex-sm-row align-start align-sm-center mb-3 gap-2">
                     <MudButton Variant="Variant.Outlined"
                                Size="Size.Small"
                                Color="Color.Secondary"
                                StartIcon="@Icons.Material.Filled.AutoAwesome"
+                               FullWidth="true"
+                               Class="flex-sm-grow-0"
                                OnClick="RequestSuggestion"
                                Disabled="@(_suggesting || string.IsNullOrWhiteSpace(_model.Description) || _model.Description.Trim().Length < 10)">
-                        @(_suggesting ? "Analiza..." : "Predloži naslov, vrstu i prioritet")
+                        @(_suggesting ? "Analiza..." : "Predloži naslov")
                     </MudButton>
 
                     <MudText Typo="Typo.caption">Prijedlog je neobavezan.</MudText>
@@ -62,7 +64,7 @@
                             određuje upravitelj pri pregledu prijave.
                         </MudAlert>
 
-                        <div class="d-flex gap-2 mt-2">
+                        <div class="d-flex flex-column flex-sm-row gap-2 mt-2">
                             <MudButton Size="Size.Small"
                                        Variant="Variant.Filled"
                                        Color="Color.Primary"
