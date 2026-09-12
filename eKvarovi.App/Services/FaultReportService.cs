@@ -48,6 +48,12 @@ public class FaultReportService
         return result ?? new List<FaultReportListDto>();
     }
 
+    public async Task<List<FaultReportListDto>> GetMineAsync()
+    {
+        var result = await _http.GetFromJsonAsync<List<FaultReportListDto>>("api/faultreports/mine");
+        return result ?? new List<FaultReportListDto>();
+    }
+
     public async Task<FaultReportListDto?> GetByIdAsync(int id)
     {
         var response = await _http.GetAsync($"api/faultreports/{id}");

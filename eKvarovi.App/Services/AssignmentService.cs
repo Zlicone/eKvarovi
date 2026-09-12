@@ -32,6 +32,17 @@ public class AssignmentService
         return result ?? new List<AssignmentDto>();
     }
 
+    public async Task<List<AssignmentDto>> GetMineAsync(bool? activeOnly = null)
+    {
+        var url = "api/workassignments/mine";
+
+        if (activeOnly == true)
+            url += "?activeOnly=true";
+
+        var result = await _http.GetFromJsonAsync<List<AssignmentDto>>(url);
+        return result ?? new List<AssignmentDto>();
+    }
+
     public async Task<(bool Success, string? Error)> CreateAsync(AssignmentCreateDto dto)
     {
         var response = await _http.PostAsJsonAsync("api/assignments", dto);

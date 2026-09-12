@@ -1,5 +1,206 @@
-﻿<h3>MyReports</h3>
+﻿@page "/myreports"
+@rendermode InteractiveServer
+@using eKvarovi.Shared.Dtos
+@using eKvarovi.App.Services
+@using eKvarovi.App.Components.Dialogs
+@inject FaultReportService FaultReportService
+@inject LocationService LocationService
+@inject CurrentUserService CurrentUser
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@inject NavigationManager Nav
+
+<PageTitle>Moje prijave</PageTitle>
+
+<div class="d-flex justify-space-between align-center mb-4">
+    <MudText Typo="Typo.h4">Moje prijave</MudText>
+    <MudButton Variant="Variant.Filled"
+               Color="Color.Primary"
+               StartIcon="@Icons.Material.Filled.Add"
+               OnClick="OpenCreate">
+        Prijavi kvar
+    </MudButton>
+</div>
+
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    <MudGrid Class="mb-4">
+        <MudItem xs="6" md="3">
+            <MudPaper Class="pa-4 d-flex flex-column align-center">
+                <MudText Typo="Typo.h4">@_items.Count</MudText>
+                <MudText Typo="Typo.caption">Ukupno prijava</MudText>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="6" md="3">
+            <MudPaper Class="pa-4 d-flex flex-column align-center">
+                <MudText Typo="Typo.h4" Color="Color.Warning">@OpenCount</MudText>
+                <MudText Typo="Typo.caption">U obradi</MudText>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="6" md="3">
+            <MudPaper Class="pa-4 d-flex flex-column align-center">
+                <MudText Typo="Typo.h4" Color="Color.Success">@ResolvedCount</MudText>
+                <MudText Typo="Typo.caption">Riješeno</MudText>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="6" md="3">
+            <MudPaper Class="pa-4 d-flex flex-column align-center">
+                <MudText Typo="Typo.h4" Color="Color.Error">@OverdueCount</MudText>
+                <MudText Typo="Typo.caption">Zakašnjelo</MudText>
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+
+    <MudPaper Class="pa-4">
+        @if (_items.Count == 0)
+        {
+            <div class="d-flex flex-column align-center pa-8">
+                <MudIcon Icon="@Icons.Material.Filled.Inbox" Size="Size.Large" Color="Color.Default" />
+                <MudText Typo="Typo.body1" Class="mt-2">Još niste prijavili nijedan kvar.</MudText>
+                <MudText Typo="Typo.caption">Kad prijavite kvar, ovdje ćete pratiti njegovo rješavanje.</MudText>
+            </div>
+        }
+        else
+        {
+            <MudTable Items="_items" Hover="true" Striped="true" Dense="true"
+                      Breakpoint="Breakpoint.Sm">
+                <HeaderContent>
+                    <MudTh>Naslov</MudTh>
+                    <MudTh>Lokacija</MudTh>
+                    <MudTh>Vrsta</MudTh>
+                    <MudTh>Prioritet</MudTh>
+                    <MudTh>Status</MudTh>
+                    <MudTh>Izvršitelj</MudTh>
+                    <MudTh>Rok</MudTh>
+                    <MudTh>Prijavljeno</MudTh>
+                    <MudTh></MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd DataLabel="Naslov">
+                        <MudLink Href="@($"/faultreports/{context.Id}")">@context.Title</MudLink>
+                    </MudTd>
+                    <MudTd DataLabel="Lokacija">@context.LocationName</MudTd>
+                    <MudTd DataLabel="Vrsta">@(context.FaultTypeName ?? "—")</MudTd>
+                    <MudTd DataLabel="Prioritet">
+                        @if (context.PriorityName is null)
+                        {
+                            <span>—</span>
+                        }
+                        else
+                        {
+                            <MudChip T="string" Size="Size.Small" Color="@PriorityColor(context.PriorityRank)">
+                                @context.PriorityName
+                            </MudChip>
+                        }
+                    </MudTd>
+                    <MudTd DataLabel="Status">
+                        <MudChip T="string" Size="Size.Small" Color="@StatusColor(context.StatusCode)">
+                            @context.StatusName
+                        </MudChip>
+                    </MudTd>
+                    <MudTd DataLabel="Izvršitelj">@(context.ActiveTechnicianName ?? "—")</MudTd>
+                    <MudTd DataLabel="Rok">
+                        @if (context.DueDate is null)
+                        {
+                            <span>—</span>
+                        }
+                        else
+                        {
+                            <MudText Typo="Typo.body2" Color="@(context.IsOverdue ? Color.Error : Color.Default)">
+                                @context.DueDate.Value.ToLocalTime().ToString("dd.MM.yyyy.")
+                            </MudText>
+                        }
+                    </MudTd>
+                    <MudTd DataLabel="Prijavljeno">
+                        @context.CreatedAt.ToLocalTime().ToString("dd.MM.yyyy.")
+                    </MudTd>
+                    <MudTd>
+                        <MudIconButton Icon="@Icons.Material.Filled.OpenInNew"
+                                       Size="Size.Small"
+                                       OnClick="@(() => Nav.NavigateTo($"/faultreports/{context.Id}"))" />
+                    </MudTd>
+                </RowTemplate>
+                <PagerContent>
+                    <MudTablePager RowsPerPageString="Redova po stranici:" />
+                </PagerContent>
+            </MudTable>
+        }
+    </MudPaper>
+}
 
 @code {
+    private List<FaultReportListDto> _items = new();
+    private List<LocationDto> _activeLocations = new();
+    private bool _loading = true;
 
+    private int OpenCount => _items.Count(x =>
+        x.StatusCode != "RIJESENO" && x.StatusCode != "ZATVORENO");
+
+    private int ResolvedCount => _items.Count(x =>
+        x.StatusCode == "RIJESENO" || x.StatusCode == "ZATVORENO");
+
+    private int OverdueCount => _items.Count(x => x.IsOverdue);
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        await CurrentUser.InitializeAsync();
+        await LoadData();
+        StateHasChanged();
+    }
+
+    private async Task LoadData()
+    {
+        _loading = true;
+
+        _items = await FaultReportService.GetMineAsync();
+
+        var all = await LocationService.GetAllAsync();
+        _activeLocations = all.Where(l => l.IsActive).ToList();
+
+        _loading = false;
+    }
+
+    private static Color PriorityColor(int? rank) => rank switch
+    {
+        4 => Color.Error,
+        3 => Color.Warning,
+        2 => Color.Info,
+        _ => Color.Default
+    };
+
+    private static Color StatusColor(string code) => code switch
+    {
+        "ZAPRIMLJENO" => Color.Default,
+        "PREGLEDANO" => Color.Info,
+        "DODIJELJENO" => Color.Primary,
+        "U_RADU" => Color.Warning,
+        "RIJESENO" => Color.Success,
+        "ZATVORENO" => Color.Dark,
+        _ => Color.Default
+    };
+
+    private async Task OpenCreate()
+    {
+        var parameters = new DialogParameters<FaultReportDialog>
+        {
+            { x => x.Locations, _activeLocations },
+            { x => x.Employees, new List<EmployeeDto>() },
+            { x => x.ShowReporterSelect, false }
+        };
+
+        var dialog = await DialogService.ShowAsync<FaultReportDialog>("Prijava kvara", parameters);
+        var result = await dialog.Result;
+
+        if (result is not null && !result.Canceled)
+        {
+            Snackbar.Add("Prijava je poslana.", Severity.Success);
+            await LoadData();
+        }
+    }
 }

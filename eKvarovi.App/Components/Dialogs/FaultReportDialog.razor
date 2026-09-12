@@ -30,14 +30,16 @@
                 }
             </MudSelect>
 
-            @if (!IsEdit)
+            @if (!IsEdit && ShowReporterSelect)
             {
                 <MudSelect T="int" @bind-Value="_reporterId"
                            Label="Prijavitelj *"
                            Validation="@(new Func<int, string?>(v => v <= 0 ? "Prijavitelj je obavezan." : null))">
                     @foreach (var emp in Employees)
                     {
-                        <MudSelectItem T="int" Value="@emp.Id">@emp.FullName (@emp.LocationName)</MudSelectItem>
+                        <MudSelectItem T="int" Value="@emp.Id">
+                            @emp.FullName (@emp.LocationName)
+                        </MudSelectItem>
                     }
                 </MudSelect>
             }
@@ -64,6 +66,7 @@
     [Parameter] public FaultReportListDto? Existing { get; set; }
     [Parameter] public List<LocationDto> Locations { get; set; } = new();
     [Parameter] public List<EmployeeDto> Employees { get; set; } = new();
+    [Parameter] public bool ShowReporterSelect { get; set; }
 
     private MudForm _form = default!;
     private FaultReportUpdateDto _model = new();

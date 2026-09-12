@@ -1,5 +1,267 @@
-﻿<h3>MyAssignments</h3>
+﻿@page "/myassignments"
+@rendermode InteractiveServer
+@using eKvarovi.Shared.Dtos
+@using eKvarovi.App.Services
+@using eKvarovi.App.Components.Dialogs
+@inject AssignmentService AssignmentService
+@inject InterventionService InterventionService
+@inject MaterialService MaterialService
+@inject LookupService LookupService
+@inject CurrentUserService CurrentUser
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@inject NavigationManager Nav
+
+<PageTitle>Moji nalozi</PageTitle>
+
+<MudText Typo="Typo.h4" Class="mb-4">Moji radni nalozi</MudText>
+
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    <MudPaper Class="pa-4 mb-4">
+        <MudCheckBox T="bool" Value="_activeOnly"
+                     ValueChanged="OnActiveOnlyChanged"
+                     Label="Prikaži samo aktivne naloge"
+                     Color="Color.Primary" />
+    </MudPaper>
+
+    @if (_assignments.Count == 0)
+    {
+        <MudPaper Class="pa-8 d-flex flex-column align-center">
+            <MudIcon Icon="@Icons.Material.Filled.AssignmentTurnedIn" Size="Size.Large" />
+            <MudText Typo="Typo.body1" Class="mt-2">Trenutno nemate dodijeljenih naloga.</MudText>
+            <MudText Typo="Typo.caption">Kad vam upravitelj dodijeli prijavu, pojavit će se ovdje.</MudText>
+        </MudPaper>
+    }
+    else
+    {
+        <MudGrid>
+            @foreach (var a in _assignments)
+            {
+                <MudItem xs="12" md="6">
+                    <MudCard Outlined="true" Class="@(a.IsActive ? "" : "mud-theme-default")">
+                        <MudCardHeader>
+                            <CardHeaderContent>
+                                <MudLink Href="@($"/faultreports/{a.FaultReportId}")" Typo="Typo.h6">
+                                    @a.FaultReportTitle
+                                </MudLink>
+                                <MudText Typo="Typo.caption">@a.LocationName</MudText>
+                            </CardHeaderContent>
+                            <CardHeaderActions>
+                                <MudChip T="string" Size="Size.Small"
+                                         Color="@(a.IsActive ? Color.Success : Color.Default)">
+                                    @(a.IsActive ? "Aktivan" : "Zatvoren")
+                                </MudChip>
+                            </CardHeaderActions>
+                        </MudCardHeader>
+
+                        <MudCardContent>
+                            <div class="d-flex flex-wrap gap-2 mb-3">
+                                @if (a.PriorityName is not null)
+                                {
+                                    <MudChip T="string" Size="Size.Small" Color="@PriorityColor(a.PriorityRank)">
+                                        @a.PriorityName
+                                    </MudChip>
+                                }
+                                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">
+                                    @a.ReportStatusName
+                                </MudChip>
+                                @if (a.DueDate is not null)
+                                {
+                                    <MudChip T="string" Size="Size.Small"
+                                             Color="@(a.DueDate < DateTime.UtcNow ? Color.Error : Color.Default)"
+                                             Icon="@Icons.Material.Filled.Event">
+                                        @a.DueDate.Value.ToLocalTime().ToString("dd.MM.yyyy.")
+                                    </MudChip>
+                                }
+                            </div>
+
+                            <MudText Typo="Typo.caption">
+                                Dodijeljeno: @a.AssignedAt.ToLocalTime().ToString("dd.MM.yyyy. HH:mm")
+                            </MudText>
+
+                            @if (!string.IsNullOrWhiteSpace(a.Note))
+                            {
+                                <MudAlert Severity="Severity.Info" Dense="true" Class="mt-2">
+                                    @a.Note
+                                </MudAlert>
+                            }
+
+                            @{
+                                var mine = _interventions.Where(i => i.FaultAssignmentId == a.Id).ToList();
+                            }
+
+                            @if (mine.Count > 0)
+                            {
+                                <MudDivider Class="my-3" />
+                                <MudText Typo="Typo.subtitle2" Class="mb-2">
+                                    Intervencije (@mine.Count)
+                                </MudText>
+
+                                @foreach (var i in mine)
+                                {
+                                    <div class="d-flex justify-space-between align-center py-1">
+                                        <div>
+                                            <MudChip T="string" Size="Size.Small"
+                                                     Color="@InterventionColor(i.StatusCode)">
+                                                @i.StatusName
+                                            </MudChip>
+                                            @if (i.StartedAt is not null)
+                                            {
+                                                <MudText Typo="Typo.caption" Class="d-inline ml-2">
+                                                    @i.StartedAt.Value.ToLocalTime().ToString("dd.MM. HH:mm")
+                                                </MudText>
+                                            }
+                                        </div>
+                                        <div>
+                                            <MudIconButton Icon="@Icons.Material.Filled.Inventory"
+                                                           Size="Size.Small"
+                                                           Title="Materijali"
+                                                           OnClick="@(() => OpenMaterials(i))" />
+                                            <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                                                           Size="Size.Small"
+                                                           Color="Color.Primary"
+                                                           Title="Uredi"
+                                                           Disabled="!i.IsEditable"
+                                                           OnClick="@(() => OpenEditIntervention(i))" />
+                                        </div>
+                                    </div>
+                                }
+                            }
+                        </MudCardContent>
+
+                        @if (a.IsActive)
+                        {
+                            <MudCardActions>
+                                <MudButton Variant="Variant.Filled"
+                                           Color="Color.Primary"
+                                           StartIcon="@Icons.Material.Filled.Build"
+                                           OnClick="@(() => OpenNewIntervention(a))">
+                                    Nova intervencija
+                                </MudButton>
+                                <MudSpacer />
+                                <MudButton Variant="Variant.Text"
+                                           StartIcon="@Icons.Material.Filled.OpenInNew"
+                                           OnClick="@(() => Nav.NavigateTo($"/faultreports/{a.FaultReportId}"))">
+                                    Otvori prijavu
+                                </MudButton>
+                            </MudCardActions>
+                        }
+                    </MudCard>
+                </MudItem>
+            }
+        </MudGrid>
+    }
+}
 
 @code {
+    private List<AssignmentDto> _assignments = new();
+    private List<InterventionDto> _interventions = new();
+    private List<MaterialDto> _materials = new();
+    private List<LookupDto> _interventionStatuses = new();
 
+    private bool _activeOnly = true;
+    private bool _loading = true;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        await CurrentUser.InitializeAsync();
+
+        _materials = await MaterialService.GetAllAsync(isActive: true);
+        _interventionStatuses = await LookupService.GetInterventionStatusesAsync();
+
+        await LoadData();
+        StateHasChanged();
+    }
+
+    private async Task LoadData()
+    {
+        _loading = true;
+
+        _assignments = await AssignmentService.GetMineAsync(_activeOnly ? true : null);
+
+        var employeeId = CurrentUser.User?.EmployeeId;
+
+        _interventions = employeeId is null
+            ? new List<InterventionDto>()
+            : await InterventionService.GetAllAsync(technicianId: employeeId.Value);
+
+        _loading = false;
+    }
+
+    private async Task OnActiveOnlyChanged(bool value)
+    {
+        _activeOnly = value;
+        await LoadData();
+    }
+
+    private static Color PriorityColor(int? rank) => rank switch
+    {
+        4 => Color.Error,
+        3 => Color.Warning,
+        2 => Color.Info,
+        _ => Color.Default
+    };
+
+    private static Color InterventionColor(string code) => code switch
+    {
+        "PLANIRANA" => Color.Default,
+        "U_TIJEKU" => Color.Warning,
+        "ZAVRSENA" => Color.Success,
+        "NEUSPJESNA" => Color.Error,
+        _ => Color.Default
+    };
+
+    private async Task OpenNewIntervention(AssignmentDto assignment)
+    {
+        var parameters = new DialogParameters<NewInterventionDialog>
+        {
+            { x => x.Assignments, new List<AssignmentDto> { assignment } }
+        };
+
+        var dialog = await DialogService.ShowAsync<NewInterventionDialog>("Nova intervencija", parameters);
+        var result = await dialog.Result;
+
+        if (result is not null && !result.Canceled)
+        {
+            Snackbar.Add("Intervencija je otvorena.", Severity.Success);
+            await LoadData();
+        }
+    }
+
+    private async Task OpenEditIntervention(InterventionDto item)
+    {
+        var parameters = new DialogParameters<InterventionDialog>
+        {
+            { x => x.Intervention, item },
+            { x => x.Statuses, _interventionStatuses }
+        };
+
+        var dialog = await DialogService.ShowAsync<InterventionDialog>("Uređivanje intervencije", parameters);
+        var result = await dialog.Result;
+
+        if (result is not null && !result.Canceled)
+        {
+            Snackbar.Add("Intervencija je spremljena.", Severity.Success);
+            await LoadData();
+        }
+    }
+
+    private async Task OpenMaterials(InterventionDto item)
+    {
+        var parameters = new DialogParameters<MaterialUsageDialog>
+        {
+            { x => x.Intervention, item },
+            { x => x.Materials, _materials }
+        };
+
+        await DialogService.ShowAsync<MaterialUsageDialog>("Utrošak materijala", parameters);
+        await LoadData();
+    }
 }

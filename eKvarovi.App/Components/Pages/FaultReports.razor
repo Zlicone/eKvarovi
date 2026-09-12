@@ -3,6 +3,8 @@
 @using eKvarovi.Shared.Dtos
 @using eKvarovi.App.Services
 @using eKvarovi.App.Components.Dialogs
+@using eKvarovi.App.Services
+@inject CurrentUserService CurrentUser
 @inject FaultReportService FaultReportService
 @inject LocationService LocationService
 @inject EmployeeService EmployeeService
@@ -277,7 +279,8 @@
         var parameters = new DialogParameters<FaultReportDialog>
         {
             { x => x.Locations, _activeLocations },
-            { x => x.Employees, _employees }
+            { x => x.Employees, _employees },
+            { x => x.ShowReporterSelect, CurrentUser.HasAnyRole("Admin", "Manager") }
         };
 
         var dialog = await DialogService.ShowAsync<FaultReportDialog>("Nova prijava kvara", parameters);
