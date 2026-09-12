@@ -3,6 +3,7 @@
 @using eKvarovi.Shared.Dtos
 @using eKvarovi.App.Services
 @using eKvarovi.App.Components.Dialogs
+@inject CurrentUserService CurrentUser
 @inject EmployeeService EmployeeService
 @inject LocationService LocationService
 @inject IDialogService DialogService
@@ -149,13 +150,19 @@
     private string? _search;
     private int? _locationId;
     private bool? _isActive;
-    private bool _loading;
+    private bool _loading=true;
 
-    protected override async Task OnInitializedAsync()
+    protected override async Task OnAfterRenderAsync(bool firstRender)
     {
+        if (!firstRender) return;
+
+        await CurrentUser.InitializeAsync();
+
         _allLocations = await LocationService.GetAllAsync();
         _activeLocations = _allLocations.Where(l => l.IsActive).ToList();
         await LoadData();
+
+        StateHasChanged();
     }
 
     private async Task LoadData()

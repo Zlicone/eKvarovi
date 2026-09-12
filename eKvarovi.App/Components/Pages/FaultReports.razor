@@ -3,7 +3,6 @@
 @using eKvarovi.Shared.Dtos
 @using eKvarovi.App.Services
 @using eKvarovi.App.Components.Dialogs
-@using eKvarovi.App.Services
 @inject CurrentUserService CurrentUser
 @inject FaultReportService FaultReportService
 @inject LocationService LocationService
@@ -190,10 +189,14 @@
     private int? _locationId;
     private bool _unassigned;
     private bool _overdue;
-    private bool _loading;
+    private bool _loading=true;
 
-    protected override async Task OnInitializedAsync()
+    protected override async Task OnAfterRenderAsync(bool firstRender)
     {
+        if (!firstRender) return;
+
+        await CurrentUser.InitializeAsync();
+
         _statuses = await LookupService.GetFaultStatusesAsync();
         _priorities = await LookupService.GetFaultPrioritiesAsync();
         _faultTypes = await LookupService.GetFaultTypesAsync();
@@ -202,6 +205,8 @@
         _employees = await EmployeeService.GetAllAsync(isActive: true);
 
         await LoadData();
+
+        StateHasChanged();
     }
 
     private async Task OpenAssign(FaultReportListDto item)

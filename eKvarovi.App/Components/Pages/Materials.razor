@@ -3,6 +3,7 @@
 @using eKvarovi.Shared.Dtos
 @using eKvarovi.App.Services
 @using eKvarovi.App.Components.Dialogs
+@inject CurrentUserService CurrentUser
 @inject MaterialService MaterialService
 @inject LookupService LookupService
 @inject IDialogService DialogService
@@ -107,12 +108,15 @@
     private string? _search;
     private int? _unitId;
     private bool? _isActive;
-    private bool _loading;
+    private bool _loading=true;
 
-    protected override async Task OnInitializedAsync()
+    protected override async Task OnAfterRenderAsync(bool firstRender)
     {
+        if (!firstRender) return;
+        await CurrentUser.InitializeAsync();
         _units = await LookupService.GetMaterialUnitsAsync();
         await LoadData();
+        StateHasChanged();
     }
 
     private async Task LoadData()

@@ -3,6 +3,7 @@
 @using eKvarovi.Shared.Dtos
 @using eKvarovi.App.Services
 @using eKvarovi.App.Components.Dialogs
+@inject CurrentUserService CurrentUser
 @inject InterventionService InterventionService
 @inject AssignmentService AssignmentService
 @inject MaterialService MaterialService
@@ -124,7 +125,7 @@
     </MudTable>
 </MudPaper>
 
-@code {
+                        @code {
     private List<InterventionDto> _items = new();
     private List<LookupDto> _statuses = new();
     private List<EmployeeDto> _employees = new();
@@ -134,14 +135,19 @@
     private string? _search;
     private int? _statusId;
     private int? _technicianId;
-    private bool _loading;
+    private bool _loading=true;
 
-    protected override async Task OnInitializedAsync()
+    protected override async Task OnAfterRenderAsync(bool firstRender)
     {
+        if (!firstRender) return;
+
+        await CurrentUser.InitializeAsync();
         _statuses = await LookupService.GetInterventionStatusesAsync();
         _employees = await EmployeeService.GetAllAsync(isActive: true);
         _materials = await MaterialService.GetAllAsync(isActive: true);
         await LoadData();
+
+        StateHasChanged();
     }
 
     private async Task LoadData()

@@ -4,6 +4,7 @@
 @using eKvarovi.App.Services
 @using eKvarovi.App.Components.Dialogs
 @using eKvarovi.App.Components.Shared
+@inject CurrentUserService CurrentUser
 @inject FaultReportService FaultReportService
 @inject AssignmentService AssignmentService
 @inject InterventionService InterventionService
@@ -283,7 +284,21 @@ else
         .OrderByDescending(i => i.CreatedAt)
         .FirstOrDefault(i => !string.IsNullOrWhiteSpace(i.Note))?.Note;
 
-    protected override async Task OnParametersSetAsync()
+    private int _loadedId;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender && _loadedId == Id) return;
+
+        _loadedId = Id;
+
+        await CurrentUser.InitializeAsync();
+        await LoadAll();
+
+        StateHasChanged();
+    }
+
+    private async Task LoadAll()
     {
         _loading = true;
 
@@ -303,7 +318,11 @@ else
         _loading = false;
     }
 
-    private async Task Reload() => await OnParametersSetAsync();
+    private async Task Reload()
+    {
+        await LoadAll();
+        StateHasChanged();
+    }
 
     private static string FormatDuration(int minutes)
     {
