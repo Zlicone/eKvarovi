@@ -26,6 +26,7 @@ builder.Services.AddScoped<AttachmentService>();
 builder.Services.AddScoped<ProtectedLocalStorage>();
 builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<CurrentUserService>();
+builder.Services.AddScoped<DashboardService>();
 
 var app = builder.Build();
 

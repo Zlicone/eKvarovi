@@ -1,4 +1,255 @@
 ﻿@page "/"
+@rendermode InteractiveServer
+@using eKvarovi.Shared.Dtos
+@using eKvarovi.App.Services
+@inject DashboardService DashboardService
+@inject CurrentUserService CurrentUser
+@inject NavigationManager Nav
 
-<PageTitle>Home</PageTitle>
-<MudPaper>    </MudPaper>
+<PageTitle>Početna</PageTitle>
+
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else if (_data is null)
+{
+    <MudAlert Severity="Severity.Warning">Podatke nije bilo moguće dohvatiti.</MudAlert>
+}
+else
+{
+    <MudText Typo="Typo.h4" Class="mb-1">
+        Dobrodošli@(CurrentUser.User?.EmployeeName is not null ? ", " + CurrentUser.User.EmployeeName : "")
+    </MudText>
+    <MudText Typo="Typo.body2" Class="mb-6">
+        Pregled stanja prijava i kvarova na dan @DateTime.Now.ToString("dd.MM.yyyy.")
+    </MudText>
+
+    @if (_data.Personal is not null)
+    {
+        <MudText Typo="Typo.h6" Class="mb-3">Moj pregled</MudText>
+        <MudGrid Class="mb-6">
+            <MudItem xs="6" md="3">
+                <MudPaper Class="pa-4" Style="cursor: pointer;" @onclick="@(() => Nav.NavigateTo("/myreports"))">
+                    <MudText Typo="Typo.h4" Color="Color.Primary">@_data.Personal.MyOpenReports</MudText>
+                    <MudText Typo="Typo.caption">Moje otvorene prijave</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="6" md="3">
+                <MudPaper Class="pa-4">
+                    <MudText Typo="Typo.h4" Color="Color.Success">@_data.Personal.MyResolvedReports</MudText>
+                    <MudText Typo="Typo.caption">Moje riješene prijave</MudText>
+                </MudPaper>
+            </MudItem>
+            @if (CurrentUser.HasRole("Technician"))
+            {
+                <MudItem xs="6" md="3">
+                    <MudPaper Class="pa-4" Style="cursor: pointer;" @onclick="@(() => Nav.NavigateTo("/myassignments"))">
+                        <MudText Typo="Typo.h4" Color="Color.Info">@_data.Personal.MyActiveAssignments</MudText>
+                        <MudText Typo="Typo.caption">Moji aktivni nalozi</MudText>
+                    </MudPaper>
+                </MudItem>
+                <MudItem xs="6" md="3">
+                    <MudPaper Class="pa-4">
+                        <MudText Typo="Typo.h4" Color="Color.Warning">@_data.Personal.MyOpenInterventions</MudText>
+                        <MudText Typo="Typo.caption">Moje otvorene intervencije</MudText>
+                    </MudPaper>
+                </MudItem>
+            }
+        </MudGrid>
+    }
+
+    @if (CurrentUser.HasAnyRole("Admin", "Manager", "Technician"))
+    {
+        <MudText Typo="Typo.h6" Class="mb-3">Stanje sustava</MudText>
+        <MudGrid Class="mb-6">
+            <MudItem xs="6" md="4" lg="2">
+                <MudPaper Class="pa-4 d-flex flex-column align-center">
+                    <MudIcon Icon="@Icons.Material.Filled.ReportProblem" Color="Color.Primary" />
+                    <MudText Typo="Typo.h5" Class="mt-1">@_data.OpenReports</MudText>
+                    <MudText Typo="Typo.caption" Align="Align.Center">Otvorene prijave</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="6" md="4" lg="2">
+                <MudPaper Class="pa-4 d-flex flex-column align-center">
+                    <MudIcon Icon="@Icons.Material.Filled.PriorityHigh" Color="Color.Error" />
+                    <MudText Typo="Typo.h5" Class="mt-1">@_data.CriticalReports</MudText>
+                    <MudText Typo="Typo.caption" Align="Align.Center">Kritične</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="6" md="4" lg="2">
+                <MudPaper Class="pa-4 d-flex flex-column align-center">
+                    <MudIcon Icon="@Icons.Material.Filled.Schedule" Color="Color.Warning" />
+                    <MudText Typo="Typo.h5" Class="mt-1">@_data.OverdueReports</MudText>
+                    <MudText Typo="Typo.caption" Align="Align.Center">Zakašnjele</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="6" md="4" lg="2">
+                <MudPaper Class="pa-4 d-flex flex-column align-center">
+                    <MudIcon Icon="@Icons.Material.Filled.PersonOff" Color="Color.Default" />
+                    <MudText Typo="Typo.h5" Class="mt-1">@_data.UnassignedReports</MudText>
+                    <MudText Typo="Typo.caption" Align="Align.Center">Bez izvršitelja</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="6" md="4" lg="2">
+                <MudPaper Class="pa-4 d-flex flex-column align-center">
+                    <MudIcon Icon="@Icons.Material.Filled.Handyman" Color="Color.Info" />
+                    <MudText Typo="Typo.h5" Class="mt-1">@_data.ActiveInterventions</MudText>
+                    <MudText Typo="Typo.caption" Align="Align.Center">Aktivne intervencije</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="6" md="4" lg="2">
+                <MudPaper Class="pa-4 d-flex flex-column align-center">
+                    <MudIcon Icon="@Icons.Material.Filled.Timer" Color="Color.Success" />
+                    <MudText Typo="Typo.h5" Class="mt-1">
+                        @(_data.AverageResolutionHours is null ? "—" : FormatHours(_data.AverageResolutionHours.Value))
+                    </MudText>
+                    <MudText Typo="Typo.caption" Align="Align.Center">Prosječno rješavanje</MudText>
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
+
+        <MudGrid>
+            <MudItem xs="12" md="4">
+                <MudPaper Class="pa-4" Style="height: 100%;">
+                    <MudText Typo="Typo.h6" Class="mb-3">Po statusu</MudText>
+                    @foreach (var s in _data.ByStatus)
+                    {
+                        <div class="d-flex justify-space-between align-center py-1">
+                            <MudText Typo="Typo.body2">@s.Label</MudText>
+                            <MudChip T="string" Size="Size.Small">@s.Count</MudChip>
+                        </div>
+                    }
+                </MudPaper>
+            </MudItem>
+
+            <MudItem xs="12" md="4">
+                <MudPaper Class="pa-4" Style="height: 100%;">
+                    <MudText Typo="Typo.h6" Class="mb-3">Po vrsti kvara</MudText>
+                    @foreach (var t in _data.ByFaultType)
+                    {
+                        <div class="d-flex justify-space-between align-center py-1">
+                            <MudText Typo="Typo.body2">@t.Label</MudText>
+                            <MudChip T="string" Size="Size.Small">@t.Count</MudChip>
+                        </div>
+                    }
+                </MudPaper>
+            </MudItem>
+
+            <MudItem xs="12" md="4">
+                <MudPaper Class="pa-4" Style="height: 100%;">
+                    <MudText Typo="Typo.h6" Class="mb-3">Lokacije s najviše prijava</MudText>
+                    @if (_data.ByLocation.Count == 0)
+                    {
+                        <MudText Typo="Typo.body2">Nema podataka.</MudText>
+                    }
+                    else
+                    {
+                        @foreach (var l in _data.ByLocation)
+                        {
+                            <div class="d-flex justify-space-between align-center py-1">
+                                <MudText Typo="Typo.body2">@l.Label</MudText>
+                                <MudChip T="string" Size="Size.Small" Color="Color.Primary">@l.Count</MudChip>
+                            </div>
+                        }
+                    }
+                </MudPaper>
+            </MudItem>
+
+            <MudItem xs="12">
+                <MudPaper Class="pa-4">
+                    <div class="d-flex justify-space-between align-center mb-3">
+                        <MudText Typo="Typo.h6">Zadnjih pet prijava</MudText>
+                        <MudButton Size="Size.Small" Variant="Variant.Text"
+                                   EndIcon="@Icons.Material.Filled.ArrowForward"
+                                   OnClick="@(() => Nav.NavigateTo("/faultreports"))">
+                            Sve prijave
+                        </MudButton>
+                    </div>
+
+                    <MudTable Items="_data.LatestReports" Dense="true" Hover="true"
+                              Breakpoint="Breakpoint.Sm"
+                              NoRecordsText="Još nema prijava.">
+                        <HeaderContent>
+                            <MudTh>Naslov</MudTh>
+                            <MudTh>Lokacija</MudTh>
+                            <MudTh>Prioritet</MudTh>
+                            <MudTh>Status</MudTh>
+                            <MudTh>Izvršitelj</MudTh>
+                            <MudTh>Prijavljeno</MudTh>
+                        </HeaderContent>
+                        <RowTemplate>
+                            <MudTd DataLabel="Naslov">
+                                <MudLink Href="@($"/faultreports/{context.Id}")">@context.Title</MudLink>
+                            </MudTd>
+                            <MudTd DataLabel="Lokacija">@context.LocationName</MudTd>
+                            <MudTd DataLabel="Prioritet">
+                                @if (context.PriorityName is null)
+                                {
+                                    <span>—</span>
+                                }
+                                else
+                                {
+                                    <MudChip T="string" Size="Size.Small" Color="@PriorityColor(context.PriorityRank)">
+                                        @context.PriorityName
+                                    </MudChip>
+                                }
+                            </MudTd>
+                            <MudTd DataLabel="Status">
+                                <MudChip T="string" Size="Size.Small" Color="@StatusColor(context.StatusCode)">
+                                    @context.StatusName
+                                </MudChip>
+                            </MudTd>
+                            <MudTd DataLabel="Izvršitelj">@(context.ActiveTechnicianName ?? "—")</MudTd>
+                            <MudTd DataLabel="Prijavljeno">
+                                @context.CreatedAt.ToLocalTime().ToString("dd.MM.yyyy.")
+                            </MudTd>
+                        </RowTemplate>
+                    </MudTable>
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
+    }
+}
+
+@code {
+    private DashboardDto? _data;
+    private bool _loading = true;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        await CurrentUser.InitializeAsync();
+
+        _data = await DashboardService.GetAsync();
+        _loading = false;
+
+        StateHasChanged();
+    }
+
+    private static string FormatHours(double hours)
+    {
+        if (hours < 24) return $"{hours:0.#} h";
+        return $"{hours / 24:0.#} d";
+    }
+
+    private static Color PriorityColor(int? rank) => rank switch
+    {
+        4 => Color.Error,
+        3 => Color.Warning,
+        2 => Color.Info,
+        _ => Color.Default
+    };
+
+    private static Color StatusColor(string code) => code switch
+    {
+        "ZAPRIMLJENO" => Color.Default,
+        "PREGLEDANO" => Color.Info,
+        "DODIJELJENO" => Color.Primary,
+        "U_RADU" => Color.Warning,
+        "RIJESENO" => Color.Success,
+        "ZATVORENO" => Color.Dark,
+        _ => Color.Default
+    };
+}
