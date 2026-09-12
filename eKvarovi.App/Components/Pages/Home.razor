@@ -208,6 +208,156 @@ else
                     </MudTable>
                 </MudPaper>
             </MudItem>
+            <MudItem xs="12">
+                @if (_sla is not null)
+                {
+                    <MudPaper Class="pa-4">
+                        <div class="d-flex justify-space-between align-center mb-3 flex-wrap gap-2">
+                            <MudText Typo="Typo.h6">Poštivanje rokova i trendovi</MudText>
+
+                            <MudToggleGroup T="int" Value="_trendMonths" ValueChanged="OnMonthsChanged"
+                                            Size="Size.Small" Color="Color.Primary">
+                                <MudToggleItem T="int" Value="3" Text="3 mj" />
+                                <MudToggleItem T="int" Value="6" Text="6 mj" />
+                                <MudToggleItem T="int" Value="12" Text="12 mj" />
+                            </MudToggleGroup>
+                        </div>
+
+                        <MudGrid Class="mb-4">
+                            <MudItem xs="6" md="3">
+                                <MudPaper Class="pa-3 d-flex flex-column align-center" Outlined="true">
+                                    <MudText Typo="Typo.h5" Color="@OnTimeColor(_sla.OnTimePercentage)">
+                                        @(_sla.OnTimePercentage is null ? "—" : $"{_sla.OnTimePercentage}%")
+                                    </MudText>
+                                    <MudText Typo="Typo.caption" Align="Align.Center">Riješeno u roku</MudText>
+                                </MudPaper>
+                            </MudItem>
+                            <MudItem xs="6" md="3">
+                                <MudPaper Class="pa-3 d-flex flex-column align-center" Outlined="true">
+                                    <MudText Typo="Typo.h5" Color="Color.Success">@_sla.MetOnTime</MudText>
+                                    <MudText Typo="Typo.caption" Align="Align.Center">U roku</MudText>
+                                </MudPaper>
+                            </MudItem>
+                            <MudItem xs="6" md="3">
+                                <MudPaper Class="pa-3 d-flex flex-column align-center" Outlined="true">
+                                    <MudText Typo="Typo.h5" Color="Color.Error">@_sla.MissedDeadline</MudText>
+                                    <MudText Typo="Typo.caption" Align="Align.Center">Probijen rok</MudText>
+                                </MudPaper>
+                            </MudItem>
+                            <MudItem xs="6" md="3">
+                                <MudPaper Class="pa-3 d-flex flex-column align-center" Outlined="true">
+                                    <MudText Typo="Typo.h5" Color="Color.Warning">@_sla.StillOpenOverdue</MudText>
+                                    <MudText Typo="Typo.caption" Align="Align.Center">Otvoreno, rok prošao</MudText>
+                                </MudPaper>
+                            </MudItem>
+                        </MudGrid>
+
+                        <MudText Typo="Typo.subtitle2" Class="mb-2">Kretanje po mjesecima</MudText>
+
+                        <div class="d-flex align-end gap-3 mb-4" style="height: 160px; overflow-x: auto;">
+                            @foreach (var m in _sla.MonthlyTrend)
+                            {
+                                var max = Math.Max(1, _sla.MonthlyTrend.Max(x => Math.Max(x.Created, x.Resolved)));
+
+                                <div class="d-flex flex-column align-center" style="min-width: 56px;">
+                                    <div class="d-flex align-end gap-1" style="height: 120px;">
+                                        <MudTooltip Text="@($"Prijavljeno: {m.Created}")">
+                                            <div style="@($"width: 18px; height: {Math.Max(2, m.Created * 110 / max)}px; background: var(--mud-palette-primary); border-radius: 2px 2px 0 0;")"></div>
+                                        </MudTooltip>
+                                        <MudTooltip Text="@($"Riješeno: {m.Resolved}")">
+                                            <div style="@($"width: 18px; height: {Math.Max(2, m.Resolved * 110 / max)}px; background: var(--mud-palette-success); border-radius: 2px 2px 0 0;")"></div>
+                                        </MudTooltip>
+                                    </div>
+                                    <MudText Typo="Typo.caption" Class="mt-1">@m.Label</MudText>
+                                </div>
+                            }
+                        </div>
+
+                        <div class="d-flex gap-4 mb-4">
+                            <div class="d-flex align-center gap-1">
+                                <div style="width: 12px; height: 12px; background: var(--mud-palette-primary); border-radius: 2px;"></div>
+                                <MudText Typo="Typo.caption">Prijavljeno</MudText>
+                            </div>
+                            <div class="d-flex align-center gap-1">
+                                <div style="width: 12px; height: 12px; background: var(--mud-palette-success); border-radius: 2px;"></div>
+                                <MudText Typo="Typo.caption">Riješeno</MudText>
+                            </div>
+                        </div>
+
+                        <MudGrid>
+                            <MudItem xs="12" md="6">
+                                <MudText Typo="Typo.subtitle2" Class="mb-2">Po lokaciji</MudText>
+                                <MudTable Items="_sla.ByLocation" Dense="true" Hover="true"
+                                          NoRecordsText="Nema podataka.">
+                                    <HeaderContent>
+                                        <MudTh>Lokacija</MudTh>
+                                        <MudTh>Prijava</MudTh>
+                                        <MudTh>U roku</MudTh>
+                                        <MudTh>Prosjek</MudTh>
+                                    </HeaderContent>
+                                    <RowTemplate>
+                                        <MudTd DataLabel="Lokacija">@context.Label</MudTd>
+                                        <MudTd DataLabel="Prijava">@context.Total</MudTd>
+                                        <MudTd DataLabel="U roku">
+                                            @if (context.OnTimePercentage is null)
+                                            {
+                                                <span>—</span>
+                                            }
+                                            else
+                                            {
+                                                <MudChip T="string" Size="Size.Small"
+                                                         Color="@OnTimeColor(context.OnTimePercentage)">
+                                                    @context.OnTimePercentage%
+                                                </MudChip>
+                                            }
+                                        </MudTd>
+                                        <MudTd DataLabel="Prosjek">
+                                            @(context.AverageResolutionHours is null
+                                                ? "—"
+                                                : FormatHours(context.AverageResolutionHours.Value))
+                                        </MudTd>
+                                    </RowTemplate>
+                                </MudTable>
+                            </MudItem>
+
+                            <MudItem xs="12" md="6">
+                                <MudText Typo="Typo.subtitle2" Class="mb-2">Po vrsti kvara</MudText>
+                                <MudTable Items="_sla.ByFaultType" Dense="true" Hover="true"
+                                          NoRecordsText="Nema podataka.">
+                                    <HeaderContent>
+                                        <MudTh>Vrsta</MudTh>
+                                        <MudTh>Prijava</MudTh>
+                                        <MudTh>U roku</MudTh>
+                                        <MudTh>Prosjek</MudTh>
+                                    </HeaderContent>
+                                    <RowTemplate>
+                                        <MudTd DataLabel="Vrsta">@context.Label</MudTd>
+                                        <MudTd DataLabel="Prijava">@context.Total</MudTd>
+                                        <MudTd DataLabel="U roku">
+                                            @if (context.OnTimePercentage is null)
+                                            {
+                                                <span>—</span>
+                                            }
+                                            else
+                                            {
+                                                <MudChip T="string" Size="Size.Small"
+                                                         Color="@OnTimeColor(context.OnTimePercentage)">
+                                                    @context.OnTimePercentage%
+                                                </MudChip>
+                                            }
+                                        </MudTd>
+                                        <MudTd DataLabel="Prosjek">
+                                            @(context.AverageResolutionHours is null
+                                                ? "—"
+                                                : FormatHours(context.AverageResolutionHours.Value))
+                                        </MudTd>
+                                    </RowTemplate>
+                                </MudTable>
+                            </MudItem>
+                        </MudGrid>
+                    </MudPaper>
+                }
+            </MudItem>
         </MudGrid>
     }
 }
@@ -223,6 +373,9 @@ else
         await CurrentUser.InitializeAsync();
 
         _data = await DashboardService.GetAsync();
+        if (CurrentUser.HasAnyRole("Admin", "Manager"))
+            _sla = await DashboardService.GetSlaAsync(_trendMonths);
+
         _loading = false;
 
         StateHasChanged();
@@ -251,5 +404,23 @@ else
         "RIJESENO" => Color.Success,
         "ZATVORENO" => Color.Dark,
         _ => Color.Default
+    };
+
+    private SlaOverviewDto? _sla;
+    private int _trendMonths = 6;
+
+    private async Task OnMonthsChanged(int value)
+    {
+        _trendMonths = value;
+        _sla = await DashboardService.GetSlaAsync(_trendMonths);
+        StateHasChanged();
+    }
+
+    private static Color OnTimeColor(double? percentage) => percentage switch
+    {
+        null => Color.Default,
+        >= 90 => Color.Success,
+        >= 70 => Color.Warning,
+        _ => Color.Error
     };
 }

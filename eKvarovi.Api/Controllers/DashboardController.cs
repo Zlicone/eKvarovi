@@ -152,4 +152,128 @@ public class DashboardController : ControllerBase
 
         return Ok(result);
     }
+
+    [HttpGet("sla")]
+    [Authorize(Policy = "ManageReports")]
+    public async Task<ActionResult<SlaOverviewDto>> GetSla([FromQuery] int months = 6)
+    {
+        if (months < 1) months = 1;
+        if (months > 24) months = 24;
+
+        var now = DateTime.UtcNow;
+
+        var reports = await _db.FaultReports
+            .Select(r => new
+            {
+                r.Id,
+                r.CreatedAt,
+                r.DueDate,
+                r.ResolvedAt,
+                StatusCode = r.Status!.Code,
+                LocationName = r.Location!.Name,
+                FaultTypeName = r.FaultType != null ? r.FaultType.Name : null
+            })
+            .ToListAsync();
+
+        var result = new SlaOverviewDto();
+
+        var withDue = reports.Where(r => r.DueDate.HasValue).ToList();
+
+        result.TotalWithDueDate = withDue.Count;
+
+        result.MetOnTime = withDue.Count(r =>
+            r.ResolvedAt.HasValue && r.ResolvedAt.Value <= r.DueDate!.Value);
+
+        result.MissedDeadline = withDue.Count(r =>
+            r.ResolvedAt.HasValue && r.ResolvedAt.Value > r.DueDate!.Value);
+
+        result.StillOpenOverdue = withDue.Count(r =>
+            !r.ResolvedAt.HasValue &&
+            r.DueDate!.Value < now &&
+            r.StatusCode != FaultStatusCodes.Closed);
+
+        var closedWithDue = result.MetOnTime + result.MissedDeadline;
+
+        result.OnTimePercentage = closedWithDue > 0
+            ? Math.Round(result.MetOnTime * 100.0 / closedWithDue, 1)
+            : null;
+
+        result.ByLocation = reports
+            .GroupBy(r => r.LocationName)
+            .Select(g => BuildBreakdown(g.Key, g))
+            .OrderByDescending(x => x.Total)
+            .Take(8)
+            .ToList();
+
+        result.ByFaultType = reports
+            .Where(r => r.FaultTypeName is not null)
+            .GroupBy(r => r.FaultTypeName!)
+            .Select(g => BuildBreakdown(g.Key, g))
+            .OrderByDescending(x => x.Total)
+            .ToList();
+
+        var croatian = new[]
+        {
+        "sij", "velj", "ožu", "tra", "svi", "lip",
+        "srp", "kol", "ruj", "lis", "stu", "pro"
+    };
+
+        var trend = new List<MonthlyTrendDto>();
+        var cursor = new DateTime(now.Year, now.Month, 1, 0, 0, 0, DateTimeKind.Utc)
+            .AddMonths(-(months - 1));
+
+        for (var i = 0; i < months; i++)
+        {
+            var start = cursor.AddMonths(i);
+            var end = start.AddMonths(1);
+
+            trend.Add(new MonthlyTrendDto
+            {
+                Year = start.Year,
+                Month = start.Month,
+                Label = $"{croatian[start.Month - 1]} {start.Year % 100:00}",
+                Created = reports.Count(r => r.CreatedAt >= start && r.CreatedAt < end),
+                Resolved = reports.Count(r =>
+                    r.ResolvedAt.HasValue &&
+                    r.ResolvedAt.Value >= start &&
+                    r.ResolvedAt.Value < end)
+            });
+        }
+
+        result.MonthlyTrend = trend;
+
+        return Ok(result);
+    }
+
+    private static SlaBreakdownDto BuildBreakdown(
+        string label,
+        IEnumerable<dynamic> group)
+    {
+        var items = group.ToList();
+
+        var withDue = items
+            .Where(r => r.DueDate != null && r.ResolvedAt != null)
+            .ToList();
+
+        var onTime = withDue.Count(r => r.ResolvedAt <= r.DueDate);
+
+        var resolved = items
+            .Where(r => r.ResolvedAt != null)
+            .Select(r => (double)((DateTime)r.ResolvedAt - (DateTime)r.CreatedAt).TotalHours)
+            .ToList();
+
+        return new SlaBreakdownDto
+        {
+            Label = label,
+            Total = items.Count,
+            WithDueDate = withDue.Count,
+            OnTime = onTime,
+            OnTimePercentage = withDue.Count > 0
+                ? Math.Round(onTime * 100.0 / withDue.Count, 1)
+                : null,
+            AverageResolutionHours = resolved.Count > 0
+                ? Math.Round(resolved.Average(), 1)
+                : null
+        };
+    }
 }

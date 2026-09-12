@@ -32,3 +32,35 @@ public class PersonalStatsDto
     public int MyActiveAssignments { get; set; }
     public int MyOpenInterventions { get; set; }
 }
+
+public class SlaOverviewDto
+{
+    public int TotalWithDueDate { get; set; }
+    public int MetOnTime { get; set; }
+    public int MissedDeadline { get; set; }
+    public int StillOpenOverdue { get; set; }
+    public double? OnTimePercentage { get; set; }
+
+    public List<SlaBreakdownDto> ByLocation { get; set; } = new();
+    public List<SlaBreakdownDto> ByFaultType { get; set; } = new();
+    public List<MonthlyTrendDto> MonthlyTrend { get; set; } = new();
+}
+
+public class SlaBreakdownDto
+{
+    public string Label { get; set; } = string.Empty;
+    public int Total { get; set; }
+    public int WithDueDate { get; set; }
+    public int OnTime { get; set; }
+    public double? OnTimePercentage { get; set; }
+    public double? AverageResolutionHours { get; set; }
+}
+
+public class MonthlyTrendDto
+{
+    public int Year { get; set; }
+    public int Month { get; set; }
+    public string Label { get; set; } = string.Empty;
+    public int Created { get; set; }
+    public int Resolved { get; set; }
+}
