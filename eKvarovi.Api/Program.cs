@@ -1,6 +1,7 @@
 using eKvarovi.Api.Data;
 using eKvarovi.Api.Models;
 using eKvarovi.Api.Services;
+using eKvarovi.Api.Services.Ai;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -23,6 +24,15 @@ builder.Services.AddSwaggerGen();
 
 builder.Services.AddScoped<TokenService>();
 builder.Services.AddScoped<IPasswordHasher<AppUser>, PasswordHasher<AppUser>>();
+
+builder.Services.AddScoped<MockAiService>();
+
+var aiProvider = builder.Configuration["Ai:Provider"] ?? "Mock";
+
+builder.Services.AddScoped<IAiService>(sp => aiProvider switch
+{
+    _ => sp.GetRequiredService<MockAiService>()
+});
 
 var jwtKey = builder.Configuration["Jwt:Key"]
     ?? throw new InvalidOperationException("Jwt:Key nije konfiguriran. Pogledajte upute u README-u.");
