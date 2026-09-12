@@ -230,6 +230,38 @@ prijavitelj ih ne određuje.
 
 ---
 
+## Dodatne funkcionalnosti
+
+Uz obavezni dio implementirano je i sljedeće:
+
+**Vremenska crta promjena.** Svaka promjena statusa, prioriteta i dodjele
+bilježi se u tablicu `FaultReportEvents` zajedno s korisnikom koji ju je
+napravio. Prikazuje se na profilu prijave.
+
+**Usporedni prikaz fotografija.** Fotografije snimljene prije i nakon zahvata
+prikazuju se jedna uz drugu ili preklopljene s klizačem.
+
+**SLA pokazatelji i trendovi.** Dashboard prikazuje postotak prijava riješenih
+u roku, raščlambu po lokaciji i vrsti kvara te kretanje broja prijava kroz
+odabrano razdoblje.
+
+**Mobilna prilagodba.** Tablice se na uskim ekranima prikazuju kao kartice,
+dijalozi zauzimaju punu širinu, a unos intervencije ima prečace za upis
+trenutnog vremena.
+
+**AI funkcionalnosti.** Implementirano je sučelje `IAiService` s
+implementacijom `MockAiService`, koja prijedloge izvodi analizom ključnih
+pojmova u opisu kvara. Aktivni provider bira se postavkom `Ai:Provider`.
+Dodavanje stvarnog providera svodi se na novu implementaciju istog sučelja i
+izmjenu te postavke — kod koji koristi servis ostaje nepromijenjen.
+
+AI nudi strukturirani prijedlog naslova, vrste i prioriteta iz slobodnog opisa
+kvara te tekstualni sažetak radnog naloga s pripadajućim intervencijama.
+Prijedlog se korisniku samo prikazuje; prijava se mijenja tek nakon njegove
+izričite potvrde, a vrstu i prioritet i dalje određuje upravitelj pri pregledu.
+
+---
+
 ## Sigurnost
 
 - Lozinke se pohranjuju hashirane (`PasswordHasher<AppUser>`), nikad u čistom obliku
