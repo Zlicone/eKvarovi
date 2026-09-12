@@ -1,23 +1,89 @@
 ﻿@using eKvarovi.Shared.Dtos
 @using eKvarovi.App.Services
 @inject FaultReportService FaultReportService
+@inject AiService AiService
 
 <MudDialog>
     <DialogContent>
         <MudForm @ref="_form" Model="_model">
-            <MudTextField @bind-Value="_model.Title"
-                          Label="Naslov *"
-                          Required="true"
-                          RequiredError="Naslov je obavezan."
-                          MaxLength="200"
-                          Class="mb-3" />
-
             <MudTextField @bind-Value="_model.Description"
                           Label="Opis kvara *"
                           Required="true"
                           RequiredError="Opis je obavezan."
                           Lines="4"
                           MaxLength="2000"
+                          Placeholder="Opišite kvar što detaljnije — gdje je, što se događa i koliko ometa rad."
+                          Class="mb-2" />
+
+            @if (!IsEdit)
+            {
+                <div class="d-flex align-center mb-3 gap-2">
+                    <MudButton Variant="Variant.Outlined"
+                               Size="Size.Small"
+                               Color="Color.Secondary"
+                               StartIcon="@Icons.Material.Filled.AutoAwesome"
+                               OnClick="RequestSuggestion"
+                               Disabled="@(_suggesting || string.IsNullOrWhiteSpace(_model.Description) || _model.Description.Trim().Length < 10)">
+                        @(_suggesting ? "Analiza..." : "Predloži naslov, vrstu i prioritet")
+                    </MudButton>
+
+                    <MudText Typo="Typo.caption">Prijedlog je neobavezan.</MudText>
+                </div>
+
+                @if (_suggestion is not null)
+                {
+                    <MudPaper Class="pa-3 mb-3" Outlined="true">
+                        <div class="d-flex justify-space-between align-center mb-2">
+                            <MudText Typo="Typo.subtitle2">Prijedlog sustava</MudText>
+                            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">
+                                @_suggestion.Provider
+                            </MudChip>
+                        </div>
+
+                        <MudText Typo="Typo.body2">
+                            <b>Naslov:</b> @_suggestion.SuggestedTitle
+                        </MudText>
+                        <MudText Typo="Typo.body2">
+                            <b>Vrsta:</b> @(_suggestion.SuggestedFaultTypeName ?? "nije prepoznata")
+                        </MudText>
+                        <MudText Typo="Typo.body2">
+                            <b>Prioritet:</b> @(_suggestion.SuggestedPriorityName ?? "nije predložen")
+                        </MudText>
+
+                        @if (!string.IsNullOrWhiteSpace(_suggestion.Reasoning))
+                        {
+                            <MudText Typo="Typo.caption" Class="d-block mt-2">
+                                @_suggestion.Reasoning
+                            </MudText>
+                        }
+
+                        <MudAlert Severity="Severity.Info" Dense="true" Class="mt-2">
+                            Prihvaćanjem se preuzima samo naslov. Vrstu i prioritet
+                            određuje upravitelj pri pregledu prijave.
+                        </MudAlert>
+
+                        <div class="d-flex gap-2 mt-2">
+                            <MudButton Size="Size.Small"
+                                       Variant="Variant.Filled"
+                                       Color="Color.Primary"
+                                       OnClick="AcceptSuggestion">
+                                Prihvati naslov
+                            </MudButton>
+                            <MudButton Size="Size.Small"
+                                       Variant="Variant.Text"
+                                       OnClick="DismissSuggestion">
+                                Odbaci
+                            </MudButton>
+                        </div>
+                    </MudPaper>
+                }
+            }
+
+            <MudTextField @bind-Value="_model.Title"
+                          Label="Naslov *"
+                          Required="true"
+                          RequiredError="Naslov je obavezan."
+                          MaxLength="200"
                           Class="mb-3" />
 
             <MudSelect T="int" @bind-Value="_model.LocationId"
@@ -74,6 +140,9 @@
     private bool _saving;
     private string? _error;
 
+    private AiSuggestionResultDto? _suggestion;
+    private bool _suggesting;
+
     private bool IsEdit => Existing is not null;
 
     protected override async Task OnInitializedAsync()
@@ -89,6 +158,31 @@
             LocationId = detail?.LocationId ?? Existing.LocationId
         };
     }
+
+    private async Task RequestSuggestion()
+    {
+        _suggesting = true;
+        _error = null;
+
+        var (result, error) = await AiService.SuggestReportAsync(_model.Description);
+
+        _suggesting = false;
+
+        if (result is not null)
+            _suggestion = result;
+        else
+            _error = error;
+    }
+
+    private void AcceptSuggestion()
+    {
+        if (_suggestion is null) return;
+
+        _model.Title = _suggestion.SuggestedTitle;
+        _suggestion = null;
+    }
+
+    private void DismissSuggestion() => _suggestion = null;
 
     private async Task Save()
     {

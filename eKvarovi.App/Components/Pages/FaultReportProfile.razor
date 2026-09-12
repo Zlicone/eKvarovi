@@ -4,6 +4,7 @@
 @using eKvarovi.App.Services
 @using eKvarovi.App.Components.Dialogs
 @using eKvarovi.App.Components.Shared
+@inject AiService AiService
 @inject CurrentUserService CurrentUser
 @inject FaultReportService FaultReportService
 @inject AssignmentService AssignmentService
@@ -69,6 +70,7 @@ else
                         <MudTh>Skinuto</MudTh>
                         <MudTh>Intervencije</MudTh>
                         <MudTh>Stanje</MudTh>
+                        <MudTh></MudTh>
                     </HeaderContent>
                     <RowTemplate>
                         <MudTd DataLabel="Izvršitelj">@context.TechnicianName</MudTd>
@@ -84,6 +86,13 @@ else
                                      Color="@(context.IsActive ? Color.Success : Color.Default)">
                                 @(context.IsActive ? "Aktivan" : "Zatvoren")
                             </MudChip>
+                        </MudTd>
+                        <MudTd>
+                            <MudIconButton Icon="@Icons.Material.Filled.AutoAwesome"
+                                           Size="Size.Small"
+                                           Color="Color.Secondary"
+                                           Title="Sažetak naloga"
+                                           OnClick="@(() => OpenSummary(context))" />
                         </MudTd>
                     </RowTemplate>
                 </MudTable>
@@ -487,5 +496,16 @@ else
     {
         _attachmentVersion++;
         await Reload();
+    }
+
+    private async Task OpenSummary(AssignmentDto assignment)
+    {
+        var parameters = new DialogParameters<AiSummaryDialog>
+    {
+        { x => x.AssignmentId, assignment.Id },
+        { x => x.AssignmentTitle, assignment.FaultReportTitle }
+    };
+
+        await DialogService.ShowAsync<AiSummaryDialog>("Sažetak radnog naloga", parameters);
     }
 }

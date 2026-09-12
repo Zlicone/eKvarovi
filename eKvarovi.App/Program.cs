@@ -28,6 +28,7 @@ builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<CurrentUserService>();
 builder.Services.AddScoped<DashboardService>();
 builder.Services.AddScoped<UserService>();
+builder.Services.AddScoped<AiService>();
 
 var app = builder.Build();
 

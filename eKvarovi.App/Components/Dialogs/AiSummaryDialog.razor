@@ -1,0 +1,69 @@
+﻿@using eKvarovi.Shared.Dtos
+@using eKvarovi.App.Services
+@inject AiService AiService
+
+<MudDialog>
+    <DialogContent>
+        <MudText Typo="Typo.subtitle2" Class="mb-3">@AssignmentTitle</MudText>
+
+        @if (_loading)
+        {
+            <div class="d-flex flex-column align-center pa-4">
+                <MudProgressCircular Indeterminate="true" Color="Color.Secondary" />
+                <MudText Typo="Typo.caption" Class="mt-2">Sastavljanje sažetka...</MudText>
+            </div>
+        }
+        else if (_result is not null)
+        {
+            <MudPaper Class="pa-3" Outlined="true">
+                <MudText Typo="Typo.body1" Style="white-space: pre-wrap;">
+                    @_result.Summary
+                </MudText>
+            </MudPaper>
+
+            <div class="d-flex justify-space-between align-center mt-2">
+                <MudText Typo="Typo.caption">
+                    Izvor: @_result.Provider
+                </MudText>
+                <MudText Typo="Typo.caption">
+                    @_result.GeneratedAt.ToLocalTime().ToString("dd.MM.yyyy. HH:mm")
+                </MudText>
+            </div>
+
+            <MudAlert Severity="Severity.Info" Dense="true" Class="mt-3">
+                Sažetak je informativan i ne mijenja podatke o nalogu.
+            </MudAlert>
+        }
+        else
+        {
+            <MudAlert Severity="Severity.Error">@(_error ?? "Sažetak nije dostupan.")</MudAlert>
+        }
+    </DialogContent>
+
+    <DialogActions>
+        <MudButton OnClick="Close">Zatvori</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter] public int AssignmentId { get; set; }
+    [Parameter] public string AssignmentTitle { get; set; } = string.Empty;
+
+    private AiSummaryResultDto? _result;
+    private string? _error;
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var (result, error) = await AiService.SummarizeAssignmentAsync(AssignmentId);
+
+        _result = result;
+        _error = error;
+        _loading = false;
+    }
+
+    private void Close() => MudDialog.Close(DialogResult.Ok(true));
+}
