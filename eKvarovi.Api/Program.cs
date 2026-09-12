@@ -43,7 +43,16 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         };
     });
 
-builder.Services.AddAuthorization();
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy("AdminOnly", p => p.RequireRole(RoleNames.Admin));
+
+    options.AddPolicy("ManageReports", p =>
+        p.RequireRole(RoleNames.Admin, RoleNames.Manager));
+
+    options.AddPolicy("Fieldwork", p =>
+        p.RequireRole(RoleNames.Admin, RoleNames.Manager, RoleNames.Technician));
+});
 
 var app = builder.Build();
 

@@ -2,11 +2,13 @@
 using eKvarovi.Shared.Dtos;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Authorization;
 
 namespace eKvarovi.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[Authorize]
 public class LookupsController : ControllerBase
 {
     private readonly EKvaroviDbContext _db;

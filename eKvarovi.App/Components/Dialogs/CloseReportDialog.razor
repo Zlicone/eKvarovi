@@ -1,19 +1,11 @@
-﻿@using eKvarovi.Shared.Dtos
-@using eKvarovi.App.Services
+﻿@using eKvarovi.App.Services
 @inject FaultReportService FaultReportService
 
 <MudDialog>
     <DialogContent>
-        <MudText Class="mb-3">
+        <MudText>
             Zatvaranjem se prijava „@ReportTitle" označava kao dovršena i više se ne može mijenjati.
         </MudText>
-
-        <MudSelect T="int" @bind-Value="_closedBy" Label="Zatvara *">
-            @foreach (var emp in Employees)
-            {
-                <MudSelectItem T="int" Value="@emp.Id">@emp.FullName</MudSelectItem>
-            }
-        </MudSelect>
 
         @if (!string.IsNullOrWhiteSpace(_error))
         {
@@ -35,24 +27,16 @@
 
     [Parameter] public int ReportId { get; set; }
     [Parameter] public string ReportTitle { get; set; } = string.Empty;
-    [Parameter] public List<EmployeeDto> Employees { get; set; } = new();
 
-    private int _closedBy;
     private bool _saving;
     private string? _error;
 
     private async Task Save()
     {
-        if (_closedBy <= 0)
-        {
-            _error = "Odaberite tko zatvara prijavu.";
-            return;
-        }
-
         _saving = true;
         _error = null;
 
-        var result = await FaultReportService.CloseAsync(ReportId, _closedBy);
+        var result = await FaultReportService.CloseAsync(ReportId);
 
         _saving = false;
 

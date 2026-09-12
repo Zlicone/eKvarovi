@@ -1,6 +1,7 @@
 ﻿using eKvarovi.Api.Data;
 using eKvarovi.Api.Models;
 using eKvarovi.Shared.Dtos;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -8,6 +9,7 @@ namespace eKvarovi.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[Authorize]
 public class AttachmentsController : ControllerBase
 {
     private const long MaxFileSize = 5 * 1024 * 1024;
@@ -71,6 +73,7 @@ public class AttachmentsController : ControllerBase
 
     [HttpPost]
     [RequestSizeLimit(MaxFileSize + 1024)]
+    [Authorize(Policy = "Fieldwork")]
     public async Task<ActionResult> Upload(
         [FromForm] AttachmentUploadForm form)
     {
@@ -144,6 +147,7 @@ public class AttachmentsController : ControllerBase
     }
 
     [HttpDelete("{id:int}")]
+    [Authorize(Policy = "Fieldwork")]
     public async Task<IActionResult> Delete(int id)
     {
         var entity = await _db.FaultAttachments

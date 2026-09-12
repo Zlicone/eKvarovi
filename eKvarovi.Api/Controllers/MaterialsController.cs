@@ -1,6 +1,7 @@
 ﻿using eKvarovi.Api.Data;
 using eKvarovi.Api.Models;
 using eKvarovi.Shared.Dtos;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -8,6 +9,7 @@ namespace eKvarovi.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[Authorize]
 public class MaterialsController : ControllerBase
 {
     private readonly EKvaroviDbContext _db;
@@ -78,6 +80,7 @@ public class MaterialsController : ControllerBase
     }
 
     [HttpPost]
+    [Authorize(Policy = "AdminOnly")]
     public async Task<ActionResult> Create(MaterialCreateDto dto)
     {
         var name = dto.Name.Trim();
@@ -102,6 +105,7 @@ public class MaterialsController : ControllerBase
     }
 
     [HttpPut("{id:int}")]
+    [Authorize(Policy = "AdminOnly")]
     public async Task<IActionResult> Update(int id, MaterialUpdateDto dto)
     {
         var entity = await _db.Materials.FirstOrDefaultAsync(m => m.Id == id);
@@ -130,6 +134,7 @@ public class MaterialsController : ControllerBase
     }
 
     [HttpDelete("{id:int}")]
+    [Authorize(Policy = "AdminOnly")]
     public async Task<IActionResult> Delete(int id)
     {
         var entity = await _db.Materials.FirstOrDefaultAsync(m => m.Id == id);

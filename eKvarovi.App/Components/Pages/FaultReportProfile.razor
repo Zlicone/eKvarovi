@@ -416,7 +416,6 @@ else
         {
             { x => x.ReportId, _report!.Id },
             { x => x.ReportTitle, _report.Title },
-            { x => x.Employees, _employees }
         };
 
         var dialog = await DialogService.ShowAsync<CloseReportDialog>("Zatvaranje prijave", parameters);

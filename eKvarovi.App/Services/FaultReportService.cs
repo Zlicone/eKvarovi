@@ -76,10 +76,9 @@ public class FaultReportService
         return (false, await ReadError(response, "Pregled nije spremljen."));
     }
 
-    public async Task<(bool Success, string? Error)> CloseAsync(int id, int closedByEmployeeId)
+    public async Task<(bool Success, string? Error)> CloseAsync(int id)
     {
-        var response = await _http.PostAsync(
-            $"api/faultreports/{id}/close?closedByEmployeeId={closedByEmployeeId}", null);
+        var response = await _http.PostAsync($"api/faultreports/{id}/close", null);
         if (response.IsSuccessStatusCode) return (true, null);
         return (false, await ReadError(response, "Zatvaranje nije uspjelo."));
     }

@@ -1,14 +1,17 @@
-﻿using System.Linq.Expressions;
-using eKvarovi.Api.Data;
+﻿using eKvarovi.Api.Data;
+using eKvarovi.Api.Services;
 using eKvarovi.Api.Models;
 using eKvarovi.Shared.Dtos;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Linq.Expressions;
 
 namespace eKvarovi.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[Authorize]
 public class InterventionsController : ControllerBase
 {
     private readonly EKvaroviDbContext _db;
@@ -116,6 +119,7 @@ public class InterventionsController : ControllerBase
     }
 
     [HttpPost]
+    [Authorize(Policy = "Fieldwork")]
     public async Task<ActionResult> Create(InterventionCreateDto dto)
     {
         var assignment = await _db.FaultAssignments
@@ -161,6 +165,7 @@ public class InterventionsController : ControllerBase
     }
 
     [HttpPut("{id:int}")]
+    [Authorize(Policy = "Fieldwork")]
     public async Task<IActionResult> Update(int id, InterventionUpdateDto dto)
     {
         var entity = await _db.Interventions
@@ -172,6 +177,12 @@ public class InterventionsController : ControllerBase
 
         if (entity is null)
             return NotFound($"Intervencija s ID-em {id} ne postoji.");
+
+        var employeeId = User.GetEmployeeId();
+        var isManager = User.IsInAnyRole(RoleNames.Admin, RoleNames.Manager);
+
+        if (!isManager && entity.FaultAssignment!.TechnicianId != employeeId)
+            return Forbid();
 
         if (entity.Status!.Code is InterventionStatusCodes.Completed or InterventionStatusCodes.Failed)
             return BadRequest("Zatvorenu intervenciju nije moguće mijenjati.");
@@ -240,14 +251,22 @@ public class InterventionsController : ControllerBase
     }
 
     [HttpPost("{id:int}/materials")]
+    [Authorize(Policy = "Fieldwork")]
     public async Task<IActionResult> AddMaterial(int id, MaterialUsageDto dto)
     {
         var intervention = await _db.Interventions
             .Include(i => i.Status)
+            .Include(i => i.FaultAssignment)
             .FirstOrDefaultAsync(i => i.Id == id);
 
         if (intervention is null)
             return NotFound($"Intervencija s ID-em {id} ne postoji.");
+
+        var employeeId = User.GetEmployeeId();
+        var isManager = User.IsInAnyRole(RoleNames.Admin, RoleNames.Manager);
+
+        if (!isManager && intervention.FaultAssignment!.TechnicianId != employeeId)
+            return Forbid();
 
         if (intervention.Status!.Code is InterventionStatusCodes.Completed or InterventionStatusCodes.Failed)
             return BadRequest("Materijal nije moguće dodati na zatvorenu intervenciju.");
@@ -280,14 +299,22 @@ public class InterventionsController : ControllerBase
     }
 
     [HttpDelete("{id:int}/materials/{materialId:int}")]
+    [Authorize(Policy = "Fieldwork")]
     public async Task<IActionResult> RemoveMaterial(int id, int materialId)
     {
         var intervention = await _db.Interventions
             .Include(i => i.Status)
+            .Include(i => i.FaultAssignment)
             .FirstOrDefaultAsync(i => i.Id == id);
 
         if (intervention is null)
             return NotFound($"Intervencija s ID-em {id} ne postoji.");
+
+        var employeeId = User.GetEmployeeId();
+        var isManager = User.IsInAnyRole(RoleNames.Admin, RoleNames.Manager);
+
+        if (!isManager && intervention.FaultAssignment!.TechnicianId != employeeId)
+            return Forbid();
 
         if (intervention.Status!.Code is InterventionStatusCodes.Completed or InterventionStatusCodes.Failed)
             return BadRequest("Materijal nije moguće ukloniti sa zatvorene intervencije.");

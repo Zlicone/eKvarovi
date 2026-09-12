@@ -19,42 +19,39 @@
             <MudText Typo="Typo.body2">Prijava i obrada kvarova</MudText>
         </div>
 
-        <MudForm @ref="_form" Model="_model">
+        <EditForm Model="_model" OnValidSubmit="DoLogin">
+            <DataAnnotationsValidator />
+
             <MudTextField @bind-Value="_model.Username"
                           Label="Korisničko ime"
-                          Required="true"
-                          RequiredError="Korisničko ime je obavezno."
+                          For="@(() => _model.Username)"
                           Adornment="Adornment.Start"
                           AdornmentIcon="@Icons.Material.Filled.Person"
-                          Class="mb-4"
-                          OnKeyDown="OnKeyDown" />
+                          Class="mb-4" />
 
             <MudTextField @bind-Value="_model.Password"
                           Label="Lozinka"
+                          For="@(() => _model.Password)"
                           InputType="@(_showPassword ? InputType.Text : InputType.Password)"
-                          Required="true"
-                          RequiredError="Lozinka je obavezna."
                           Adornment="Adornment.End"
                           AdornmentIcon="@(_showPassword ? Icons.Material.Filled.VisibilityOff : Icons.Material.Filled.Visibility)"
                           OnAdornmentClick="@(() => _showPassword = !_showPassword)"
-                          AdornmentAriaLabel="Prikaži lozinku"
-                          Class="mb-4"
-                          OnKeyDown="OnKeyDown" />
-        </MudForm>
+                          Class="mb-4" />
 
-        @if (!string.IsNullOrWhiteSpace(_error))
-        {
-            <MudAlert Severity="Severity.Error" Dense="true" Class="mb-4">@_error</MudAlert>
-        }
+            @if (!string.IsNullOrWhiteSpace(_error))
+            {
+                <MudAlert Severity="Severity.Error" Dense="true" Class="mb-4">@_error</MudAlert>
+            }
 
-        <MudButton Variant="Variant.Filled"
-                   Color="Color.Primary"
-                   FullWidth="true"
-                   Size="Size.Large"
-                   OnClick="DoLogin"
-                   Disabled="_busy">
-            @(_busy ? "Prijava..." : "Prijavi se")
-        </MudButton>
+            <MudButton ButtonType="ButtonType.Submit"
+                       Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       FullWidth="true"
+                       Size="Size.Large"
+                       Disabled="_busy">
+                @(_busy ? "Prijava..." : "Prijavi se")
+            </MudButton>
+        </EditForm>
 
         <MudDivider Class="my-4" />
 
@@ -64,7 +61,6 @@
 </div>
 
 @code {
-    private MudForm _form = default!;
     private LoginDto _model = new();
     private bool _busy;
     private bool _showPassword;
@@ -80,17 +76,8 @@
             Nav.NavigateTo("/", replace: true);
     }
 
-    private async Task OnKeyDown(KeyboardEventArgs e)
-    {
-        if (e.Key == "Enter")
-            await DoLogin();
-    }
-
     private async Task DoLogin()
     {
-        await _form.Validate();
-        if (!_form.IsValid) return;
-
         _busy = true;
         _error = null;
 

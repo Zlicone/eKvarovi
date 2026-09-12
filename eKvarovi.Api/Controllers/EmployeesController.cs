@@ -1,6 +1,7 @@
 ﻿using eKvarovi.Api.Data;
 using eKvarovi.Api.Models;
 using eKvarovi.Shared.Dtos;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -8,6 +9,7 @@ namespace eKvarovi.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[Authorize]
 public class EmployeesController : ControllerBase
 {
     private readonly EKvaroviDbContext _db;
@@ -91,6 +93,7 @@ public class EmployeesController : ControllerBase
     }
 
     [HttpPost]
+    [Authorize(Policy = "AdminOnly")]
     public async Task<ActionResult> Create(EmployeeCreateDto dto)
     {
         var email = dto.Email.Trim().ToLowerInvariant();
@@ -123,6 +126,7 @@ public class EmployeesController : ControllerBase
     }
 
     [HttpPut("{id:int}")]
+    [Authorize(Policy = "AdminOnly")]
     public async Task<IActionResult> Update(int id, EmployeeUpdateDto dto)
     {
         var entity = await _db.Employees.FirstOrDefaultAsync(x => x.Id == id);
@@ -162,6 +166,7 @@ public class EmployeesController : ControllerBase
     }
 
     [HttpDelete("{id:int}")]
+    [Authorize(Policy = "AdminOnly")]
     public async Task<IActionResult> Delete(int id)
     {
         var entity = await _db.Employees.FirstOrDefaultAsync(x => x.Id == id);

@@ -1,6 +1,8 @@
 ﻿using eKvarovi.Api.Data;
 using eKvarovi.Api.Models;
+using eKvarovi.Api.Services;
 using eKvarovi.Shared.Dtos;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -8,6 +10,7 @@ namespace eKvarovi.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[Authorize]
 public class FaultReportsController : ControllerBase
 {
     private readonly EKvaroviDbContext _db;
@@ -127,6 +130,51 @@ public class FaultReportsController : ControllerBase
         return Ok(items);
     }
 
+    [HttpGet("mine")]
+    public async Task<ActionResult<List<FaultReportListDto>>> GetMine()
+    {
+        var employeeId = User.GetEmployeeId();
+
+        if (employeeId is null)
+            return BadRequest("Vaš račun nije povezan sa zaposlenikom pa nema vlastitih prijava.");
+
+        var now = DateTime.UtcNow;
+
+        var items = await _db.FaultReports
+            .Where(x => x.ReporterId == employeeId.Value)
+            .OrderByDescending(x => x.CreatedAt)
+            .Select(x => new FaultReportListDto
+            {
+                Id = x.Id,
+                Title = x.Title,
+                LocationId = x.LocationId,
+                LocationName = x.Location!.Name,
+                ReporterName = x.Reporter!.FirstName + " " + x.Reporter!.LastName,
+                FaultTypeId = x.FaultTypeId,
+                FaultTypeName = x.FaultType != null ? x.FaultType.Name : null,
+                PriorityId = x.PriorityId,
+                PriorityName = x.Priority != null ? x.Priority.Name : null,
+                PriorityRank = x.Priority != null ? x.Priority.Rank : (int?)null,
+                StatusId = x.StatusId,
+                StatusCode = x.Status!.Code,
+                StatusName = x.Status!.Name,
+                DueDate = x.DueDate,
+                CreatedAt = x.CreatedAt,
+                ActiveTechnicianName = x.Assignments
+                    .Where(a => a.UnassignedAt == null)
+                    .Select(a => a.Technician!.FirstName + " " + a.Technician!.LastName)
+                    .FirstOrDefault(),
+                IsOverdue = x.DueDate != null && x.DueDate < now &&
+                            x.Status!.Code != FaultStatusCodes.Resolved &&
+                            x.Status!.Code != FaultStatusCodes.Closed,
+                InterventionCount = x.Assignments.SelectMany(a => a.Interventions).Count(),
+                AttachmentCount = x.Attachments.Count
+            })
+            .ToListAsync();
+
+        return Ok(items);
+    }
+
     [HttpGet("{id:int}")]
     public async Task<ActionResult<FaultReportListDto>> GetById(int id)
     {
@@ -168,190 +216,6 @@ public class FaultReportsController : ControllerBase
             return NotFound($"Prijava s ID-em {id} ne postoji.");
 
         return Ok(item);
-    }
-
-    [HttpPost]
-    public async Task<ActionResult> Create(FaultReportCreateDto dto)
-    {
-        var location = await _db.Locations.FirstOrDefaultAsync(l => l.Id == dto.LocationId);
-        if (location is null)
-            return BadRequest("Odabrana lokacija ne postoji.");
-
-        if (!location.IsActive)
-            return BadRequest("Prijavu nije moguće otvoriti na neaktivnoj lokaciji.");
-
-        var reporter = await _db.Employees.FirstOrDefaultAsync(e => e.Id == dto.ReporterId);
-        if (reporter is null)
-            return BadRequest("Odabrani prijavitelj ne postoji.");
-
-        if (!reporter.IsActive)
-            return BadRequest("Neaktivan zaposlenik ne može otvoriti prijavu.");
-
-        var received = await _db.FaultStatuses
-            .FirstAsync(s => s.Code == FaultStatusCodes.Received);
-
-        var entity = new FaultReport
-        {
-            Title = dto.Title.Trim(),
-            Description = dto.Description.Trim(),
-            LocationId = dto.LocationId,
-            ReporterId = dto.ReporterId,
-            StatusId = received.Id,
-            CreatedAt = DateTime.UtcNow
-        };
-
-        _db.FaultReports.Add(entity);
-        await _db.SaveChangesAsync();
-
-        EventLogger.Log(_db, entity.Id, "Otvaranje prijave", null, received.Name);
-        await _db.SaveChangesAsync();
-
-        return CreatedAtAction(nameof(GetById), new { id = entity.Id }, null);
-    }
-
-    [HttpPut("{id:int}")]
-    public async Task<IActionResult> Update(int id, FaultReportUpdateDto dto)
-    {
-        var entity = await _db.FaultReports
-            .Include(x => x.Status)
-            .FirstOrDefaultAsync(x => x.Id == id);
-
-        if (entity is null)
-            return NotFound($"Prijava s ID-em {id} ne postoji.");
-
-        if (entity.Status!.Code is not (FaultStatusCodes.Received or FaultStatusCodes.Reviewed))
-            return BadRequest("Sadržaj prijave moguće je mijenjati samo dok nije dodijeljena izvršitelju.");
-
-        var location = await _db.Locations.FirstOrDefaultAsync(l => l.Id == dto.LocationId);
-        if (location is null)
-            return BadRequest("Odabrana lokacija ne postoji.");
-
-        if (!location.IsActive && location.Id != entity.LocationId)
-            return BadRequest("Prijavu nije moguće premjestiti na neaktivnu lokaciju.");
-
-        entity.Title = dto.Title.Trim();
-        entity.Description = dto.Description.Trim();
-        entity.LocationId = dto.LocationId;
-
-        await _db.SaveChangesAsync();
-        return NoContent();
-    }
-
-    [HttpPost("{id:int}/review")]
-    public async Task<IActionResult> Review(int id, FaultReportReviewDto dto)
-    {
-        var entity = await _db.FaultReports
-            .Include(x => x.Status)
-            .FirstOrDefaultAsync(x => x.Id == id);
-
-        if (entity is null)
-            return NotFound($"Prijava s ID-em {id} ne postoji.");
-
-        if (entity.Status!.Code == FaultStatusCodes.Closed)
-            return BadRequest("Zatvorenu prijavu nije moguće mijenjati.");
-
-        if (!await _db.FaultTypes.AnyAsync(t => t.Id == dto.FaultTypeId))
-            return BadRequest("Odabrana vrsta kvara ne postoji.");
-
-        var priority = await _db.FaultPriorities.FirstOrDefaultAsync(p => p.Id == dto.PriorityId);
-        if (priority is null)
-            return BadRequest("Odabrani prioritet ne postoji.");
-
-        var maxRank = await _db.FaultPriorities.MaxAsync(p => p.Rank);
-
-        if (priority.Rank == maxRank && dto.DueDate is null)
-            return BadRequest("Prijava kritičnog prioriteta mora imati postavljen rok rješavanja.");
-
-        if (dto.DueDate is not null && dto.DueDate < entity.CreatedAt)
-            return BadRequest("Rok rješavanja ne može biti prije datuma prijave.");
-
-        var oldPriority = entity.Priority?.Name;
-
-        entity.FaultTypeId = dto.FaultTypeId;
-        entity.PriorityId = dto.PriorityId;
-        entity.DueDate = dto.DueDate;
-
-        if (entity.Status!.Code == FaultStatusCodes.Received)
-        {
-            var reviewed = await _db.FaultStatuses
-                .FirstAsync(s => s.Code == FaultStatusCodes.Reviewed);
-
-            entity.StatusId = reviewed.Id;
-            entity.ReviewedAt = DateTime.UtcNow;
-
-            EventLogger.Log(_db, entity.Id, "Promjena statusa",
-                entity.Status.Name, reviewed.Name);
-        }
-
-        EventLogger.Log(_db, entity.Id, "Promjena prioriteta", oldPriority, priority.Name);
-
-        await _db.SaveChangesAsync();
-        return NoContent();
-    }
-
-    [HttpPost("{id:int}/close")]
-    public async Task<IActionResult> Close(int id, [FromQuery] int closedByEmployeeId)
-    {
-        var entity = await _db.FaultReports
-            .Include(x => x.Status)
-            .Include(x => x.Assignments)
-                .ThenInclude(a => a.Interventions)
-                    .ThenInclude(i => i.Status)
-            .FirstOrDefaultAsync(x => x.Id == id);
-
-        if (entity is null)
-            return NotFound($"Prijava s ID-em {id} ne postoji.");
-
-        if (entity.Status!.Code == FaultStatusCodes.Closed)
-            return BadRequest("Prijava je već zatvorena.");
-
-        var hasCompleted = entity.Assignments
-            .SelectMany(a => a.Interventions)
-            .Any(i => i.Status!.Code == InterventionStatusCodes.Completed);
-
-        if (!hasCompleted)
-            return BadRequest("Prijavu je moguće zatvoriti tek nakon barem jedne uspješno završene intervencije.");
-
-        if (!await _db.Employees.AnyAsync(e => e.Id == closedByEmployeeId))
-            return BadRequest("Zaposlenik koji zatvara prijavu ne postoji.");
-
-        var closed = await _db.FaultStatuses
-            .FirstAsync(s => s.Code == FaultStatusCodes.Closed);
-
-        EventLogger.Log(_db, entity.Id, "Promjena statusa", entity.Status.Name, closed.Name);
-
-        entity.StatusId = closed.Id;
-        entity.ClosedAt = DateTime.UtcNow;
-        entity.ClosedByEmployeeId = closedByEmployeeId;
-
-        await _db.SaveChangesAsync();
-        return NoContent();
-    }
-
-    [HttpDelete("{id:int}")]
-    public async Task<IActionResult> Delete(int id)
-    {
-        var entity = await _db.FaultReports
-            .Include(x => x.Status)
-            .FirstOrDefaultAsync(x => x.Id == id);
-
-        if (entity is null)
-            return NotFound($"Prijava s ID-em {id} ne postoji.");
-
-        var hasAssignments = await _db.FaultAssignments.AnyAsync(a => a.FaultReportId == id);
-
-        if (hasAssignments)
-            return BadRequest("Prijavu nije moguće obrisati jer za nju postoji povijest dodjela i intervencija.");
-
-        if (entity.Status!.Code != FaultStatusCodes.Received)
-            return BadRequest("Moguće je obrisati samo prijavu koja još nije obrađena.");
-
-        var events = _db.FaultReportEvents.Where(e => e.FaultReportId == id);
-        _db.FaultReportEvents.RemoveRange(events);
-
-        _db.FaultReports.Remove(entity);
-        await _db.SaveChangesAsync();
-        return NoContent();
     }
 
     [HttpGet("{id:int}/detail")]
@@ -430,5 +294,204 @@ public class FaultReportsController : ControllerBase
             .ToListAsync();
 
         return Ok(items);
+    }
+
+    [HttpPost]
+    public async Task<ActionResult> Create(FaultReportCreateDto dto)
+    {
+        var employeeId = User.GetEmployeeId();
+
+        if (employeeId is null)
+            return BadRequest("Vaš račun nije povezan sa zaposlenikom pa ne možete otvarati prijave.");
+
+        var reporterId = User.IsInAnyRole(RoleNames.Admin, RoleNames.Manager) && dto.ReporterId > 0
+            ? dto.ReporterId
+            : employeeId.Value;
+
+        var location = await _db.Locations.FirstOrDefaultAsync(l => l.Id == dto.LocationId);
+        if (location is null)
+            return BadRequest("Odabrana lokacija ne postoji.");
+
+        if (!location.IsActive)
+            return BadRequest("Prijavu nije moguće otvoriti na neaktivnoj lokaciji.");
+
+        var reporter = await _db.Employees.FirstOrDefaultAsync(e => e.Id == dto.ReporterId);
+        if (reporter is null)
+            return BadRequest("Odabrani prijavitelj ne postoji.");
+
+        if (!reporter.IsActive)
+            return BadRequest("Neaktivan zaposlenik ne može otvoriti prijavu.");
+
+        var received = await _db.FaultStatuses
+            .FirstAsync(s => s.Code == FaultStatusCodes.Received);
+
+        var entity = new FaultReport
+        {
+            Title = dto.Title.Trim(),
+            Description = dto.Description.Trim(),
+            LocationId = dto.LocationId,
+            ReporterId = reporterId,
+            StatusId = received.Id,
+            CreatedAt = DateTime.UtcNow
+        };
+
+        _db.FaultReports.Add(entity);
+        await _db.SaveChangesAsync();
+
+        EventLogger.Log(_db, entity.Id, "Otvaranje prijave", null, received.Name);
+        await _db.SaveChangesAsync();
+
+        return CreatedAtAction(nameof(GetById), new { id = entity.Id }, null);
+    }
+
+    [HttpPut("{id:int}")]
+    [Authorize(Policy = "ManageReports")]
+    public async Task<IActionResult> Update(int id, FaultReportUpdateDto dto)
+    {
+        var entity = await _db.FaultReports
+            .Include(x => x.Status)
+            .FirstOrDefaultAsync(x => x.Id == id);
+
+        if (entity is null)
+            return NotFound($"Prijava s ID-em {id} ne postoji.");
+
+        if (entity.Status!.Code is not (FaultStatusCodes.Received or FaultStatusCodes.Reviewed))
+            return BadRequest("Sadržaj prijave moguće je mijenjati samo dok nije dodijeljena izvršitelju.");
+
+        var location = await _db.Locations.FirstOrDefaultAsync(l => l.Id == dto.LocationId);
+        if (location is null)
+            return BadRequest("Odabrana lokacija ne postoji.");
+
+        if (!location.IsActive && location.Id != entity.LocationId)
+            return BadRequest("Prijavu nije moguće premjestiti na neaktivnu lokaciju.");
+
+        entity.Title = dto.Title.Trim();
+        entity.Description = dto.Description.Trim();
+        entity.LocationId = dto.LocationId;
+
+        await _db.SaveChangesAsync();
+        return NoContent();
+    }
+
+    [HttpPost("{id:int}/review")]
+    [Authorize(Policy = "ManageReports")]
+    public async Task<IActionResult> Review(int id, FaultReportReviewDto dto)
+    {
+        var entity = await _db.FaultReports
+            .Include(x => x.Status)
+            .FirstOrDefaultAsync(x => x.Id == id);
+
+        if (entity is null)
+            return NotFound($"Prijava s ID-em {id} ne postoji.");
+
+        if (entity.Status!.Code == FaultStatusCodes.Closed)
+            return BadRequest("Zatvorenu prijavu nije moguće mijenjati.");
+
+        if (!await _db.FaultTypes.AnyAsync(t => t.Id == dto.FaultTypeId))
+            return BadRequest("Odabrana vrsta kvara ne postoji.");
+
+        var priority = await _db.FaultPriorities.FirstOrDefaultAsync(p => p.Id == dto.PriorityId);
+        if (priority is null)
+            return BadRequest("Odabrani prioritet ne postoji.");
+
+        var maxRank = await _db.FaultPriorities.MaxAsync(p => p.Rank);
+
+        if (priority.Rank == maxRank && dto.DueDate is null)
+            return BadRequest("Prijava kritičnog prioriteta mora imati postavljen rok rješavanja.");
+
+        if (dto.DueDate is not null && dto.DueDate < entity.CreatedAt)
+            return BadRequest("Rok rješavanja ne može biti prije datuma prijave.");
+
+        var oldPriority = entity.Priority?.Name;
+
+        entity.FaultTypeId = dto.FaultTypeId;
+        entity.PriorityId = dto.PriorityId;
+        entity.DueDate = dto.DueDate;
+
+        if (entity.Status!.Code == FaultStatusCodes.Received)
+        {
+            var reviewed = await _db.FaultStatuses
+                .FirstAsync(s => s.Code == FaultStatusCodes.Reviewed);
+
+            entity.StatusId = reviewed.Id;
+            entity.ReviewedAt = DateTime.UtcNow;
+
+            EventLogger.Log(_db, entity.Id, "Promjena statusa",
+                entity.Status.Name, reviewed.Name);
+        }
+
+        EventLogger.Log(_db, entity.Id, "Promjena prioriteta", oldPriority, priority.Name);
+
+        await _db.SaveChangesAsync();
+        return NoContent();
+    }
+
+    [HttpPost("{id:int}/close")]
+    [Authorize(Policy = "ManageReports")]
+    public async Task<IActionResult> Close(int id)
+    {
+        var employeeId = User.GetEmployeeId();
+
+        if (employeeId is null)
+            return BadRequest("Vaš račun nije povezan sa zaposlenikom pa ne možete zatvarati prijave.");
+
+        var entity = await _db.FaultReports
+            .Include(x => x.Status)
+            .Include(x => x.Assignments)
+                .ThenInclude(a => a.Interventions)
+                    .ThenInclude(i => i.Status)
+            .FirstOrDefaultAsync(x => x.Id == id);
+
+        if (entity is null)
+            return NotFound($"Prijava s ID-em {id} ne postoji.");
+
+        if (entity.Status!.Code == FaultStatusCodes.Closed)
+            return BadRequest("Prijava je već zatvorena.");
+
+        var hasCompleted = entity.Assignments
+            .SelectMany(a => a.Interventions)
+            .Any(i => i.Status!.Code == InterventionStatusCodes.Completed);
+
+        if (!hasCompleted)
+            return BadRequest("Prijavu je moguće zatvoriti tek nakon barem jedne uspješno završene intervencije.");
+
+        var closed = await _db.FaultStatuses
+            .FirstAsync(s => s.Code == FaultStatusCodes.Closed);
+
+        EventLogger.Log(_db, entity.Id, "Promjena statusa", entity.Status.Name, closed.Name);
+
+        entity.StatusId = closed.Id;
+        entity.ClosedAt = DateTime.UtcNow;
+        entity.ClosedByEmployeeId = employeeId.Value;
+
+        await _db.SaveChangesAsync();
+        return NoContent();
+    }
+
+    [HttpDelete("{id:int}")]
+    [Authorize(Policy = "ManageReports")]
+    public async Task<IActionResult> Delete(int id)
+    {
+        var entity = await _db.FaultReports
+            .Include(x => x.Status)
+            .FirstOrDefaultAsync(x => x.Id == id);
+
+        if (entity is null)
+            return NotFound($"Prijava s ID-em {id} ne postoji.");
+
+        var hasAssignments = await _db.FaultAssignments.AnyAsync(a => a.FaultReportId == id);
+
+        if (hasAssignments)
+            return BadRequest("Prijavu nije moguće obrisati jer za nju postoji povijest dodjela i intervencija.");
+
+        if (entity.Status!.Code != FaultStatusCodes.Received)
+            return BadRequest("Moguće je obrisati samo prijavu koja još nije obrađena.");
+
+        var events = _db.FaultReportEvents.Where(e => e.FaultReportId == id);
+        _db.FaultReportEvents.RemoveRange(events);
+
+        _db.FaultReports.Remove(entity);
+        await _db.SaveChangesAsync();
+        return NoContent();
     }
 }

@@ -1,28 +1,53 @@
-﻿<MudNavMenu>
+﻿@using eKvarovi.App.Services
+@inject CurrentUserService CurrentUser
+@implements IDisposable
+
+<MudNavMenu>
     <MudNavLink Href="/" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Dashboard">
         Početna
     </MudNavLink>
 
-    <MudNavGroup Title="Operativa" Icon="@Icons.Material.Filled.Build" Expanded="true">
-        <MudNavLink Href="/faultreports" Icon="@Icons.Material.Filled.ReportProblem">Prijave kvarova</MudNavLink>
-        <MudNavLink Href="/assignments" Icon="@Icons.Material.Filled.AssignmentInd">Radni nalozi</MudNavLink>
-        <MudNavLink Href="/interventions" Icon="@Icons.Material.Filled.Handyman">Intervencije</MudNavLink>
-    </MudNavGroup>
+    @if (CurrentUser.HasAnyRole("Admin", "Manager", "Technician"))
+    {
+        <MudNavGroup Title="Operativa" Icon="@Icons.Material.Filled.Build" Expanded="true">
+            <MudNavLink Href="/faultreports" Icon="@Icons.Material.Filled.ReportProblem">Prijave kvarova</MudNavLink>
+            <MudNavLink Href="/assignments" Icon="@Icons.Material.Filled.AssignmentInd">Radni nalozi</MudNavLink>
+            <MudNavLink Href="/interventions" Icon="@Icons.Material.Filled.Handyman">Intervencije</MudNavLink>
+        </MudNavGroup>
+    }
 
-    <MudNavGroup Title="Moje" Icon="@Icons.Material.Filled.Person" Expanded="true">
-        <MudNavLink Href="/myreports" Icon="@Icons.Material.Filled.Description">Moje prijave</MudNavLink>
-        <MudNavLink Href="/myassignments" Icon="@Icons.Material.Filled.Assignment">Moji nalozi</MudNavLink>
-    </MudNavGroup>
+    @if (CurrentUser.User?.EmployeeId is not null)
+    {
+        <MudNavGroup Title="Moje" Icon="@Icons.Material.Filled.Person" Expanded="true">
+            <MudNavLink Href="/myreports" Icon="@Icons.Material.Filled.Description">Moje prijave</MudNavLink>
+            @if (CurrentUser.HasRole("Technician"))
+            {
+                <MudNavLink Href="/myassignments" Icon="@Icons.Material.Filled.Assignment">Moji nalozi</MudNavLink>
+            }
+        </MudNavGroup>
+    }
 
-    <MudNavGroup Title="Šifrarnici" Icon="@Icons.Material.Filled.Folder">
-        <MudNavLink Href="/locations" Icon="@Icons.Material.Filled.LocationOn">Lokacije</MudNavLink>
-        <MudNavLink Href="/employees" Icon="@Icons.Material.Filled.Badge">Zaposlenici</MudNavLink>
-        <MudNavLink Href="/materials" Icon="@Icons.Material.Filled.Inventory">Materijali</MudNavLink>
-    </MudNavGroup>
+    @if (CurrentUser.HasAnyRole("Admin", "Manager"))
+    {
+        <MudNavGroup Title="Šifrarnici" Icon="@Icons.Material.Filled.Folder">
+            <MudNavLink Href="/locations" Icon="@Icons.Material.Filled.LocationOn">Lokacije</MudNavLink>
+            <MudNavLink Href="/employees" Icon="@Icons.Material.Filled.Badge">Zaposlenici</MudNavLink>
+            <MudNavLink Href="/materials" Icon="@Icons.Material.Filled.Inventory">Materijali</MudNavLink>
+        </MudNavGroup>
+    }
 
-    <MudNavGroup Title="Administracija" Icon="@Icons.Material.Filled.AdminPanelSettings">
-        <MudNavLink Href="/users" Icon="@Icons.Material.Filled.ManageAccounts">Korisnici</MudNavLink>
-    </MudNavGroup>
-
-    <MudNavLink Href="/login" Icon="@Icons.Material.Filled.Login">Prijava</MudNavLink>
+    @if (CurrentUser.HasRole("Admin"))
+    {
+        <MudNavGroup Title="Administracija" Icon="@Icons.Material.Filled.AdminPanelSettings">
+            <MudNavLink Href="/users" Icon="@Icons.Material.Filled.ManageAccounts">Korisnici</MudNavLink>
+        </MudNavGroup>
+    }
 </MudNavMenu>
+
+@code {
+    protected override void OnInitialized() => CurrentUser.Changed += OnChanged;
+
+    private void OnChanged() => InvokeAsync(StateHasChanged);
+
+    public void Dispose() => CurrentUser.Changed -= OnChanged;
+}

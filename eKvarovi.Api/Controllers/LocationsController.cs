@@ -1,6 +1,7 @@
 ﻿using eKvarovi.Api.Data;
 using eKvarovi.Api.Models;
 using eKvarovi.Shared.Dtos;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -8,6 +9,7 @@ namespace eKvarovi.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[Authorize]
 public class LocationsController : ControllerBase
 {
     private readonly EKvaroviDbContext _db;
@@ -98,6 +100,7 @@ public class LocationsController : ControllerBase
     }
 
     [HttpPost]
+    [Authorize(Policy = "AdminOnly")]
     public async Task<ActionResult<LocationDto>> Create(LocationCreateDto dto)
     {
         var typeExists = await _db.LocationTypes.AnyAsync(t => t.Id == dto.LocationTypeId);
@@ -121,6 +124,7 @@ public class LocationsController : ControllerBase
     }
 
     [HttpPut("{id:int}")]
+    [Authorize(Policy = "AdminOnly")]
     public async Task<IActionResult> Update(int id, LocationUpdateDto dto)
     {
         var entity = await _db.Locations.FirstOrDefaultAsync(x => x.Id == id);
@@ -152,6 +156,7 @@ public class LocationsController : ControllerBase
     }
 
     [HttpDelete("{id:int}")]
+    [Authorize(Policy = "AdminOnly")]
     public async Task<IActionResult> Delete(int id)
     {
         var entity = await _db.Locations.FirstOrDefaultAsync(x => x.Id == id);

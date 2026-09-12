@@ -1,6 +1,7 @@
 ﻿using eKvarovi.Api.Data;
 using eKvarovi.Api.Models;
 using eKvarovi.Shared.Dtos;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System.Linq.Expressions;
@@ -9,6 +10,7 @@ namespace eKvarovi.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[Authorize]
 public class AssignmentsController : ControllerBase
 {
     private readonly EKvaroviDbContext _db;
@@ -69,6 +71,7 @@ public class AssignmentsController : ControllerBase
     }
 
     [HttpPost]
+    [Authorize(Policy = "ManageReports")]
     public async Task<ActionResult> Create(AssignmentCreateDto dto)
     {
         var report = await _db.FaultReports
@@ -142,6 +145,7 @@ public class AssignmentsController : ControllerBase
     }
 
     [HttpPost("{id:int}/unassign")]
+    [Authorize(Policy = "ManageReports")]
     public async Task<IActionResult> Unassign(int id)
     {
         var assignment = await _db.FaultAssignments
