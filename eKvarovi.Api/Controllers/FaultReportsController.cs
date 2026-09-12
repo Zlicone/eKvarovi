@@ -289,7 +289,13 @@ public class FaultReportsController : ControllerBase
                 EventType = e.EventType,
                 OldValue = e.OldValue,
                 NewValue = e.NewValue,
-                ChangedAt = e.ChangedAt
+                ChangedAt = e.ChangedAt,
+                ChangedByUsername = e.ChangedByAppUser != null
+                    ? e.ChangedByAppUser.Username
+                    : null,
+                ChangedByName = e.ChangedByAppUser != null && e.ChangedByAppUser.Employee != null
+                    ? e.ChangedByAppUser.Employee.FirstName + " " + e.ChangedByAppUser.Employee.LastName
+                    : null
             })
             .ToListAsync();
 
@@ -315,7 +321,7 @@ public class FaultReportsController : ControllerBase
         if (!location.IsActive)
             return BadRequest("Prijavu nije moguće otvoriti na neaktivnoj lokaciji.");
 
-        var reporter = await _db.Employees.FirstOrDefaultAsync(e => e.Id == dto.ReporterId);
+        var reporter = await _db.Employees.FirstOrDefaultAsync(e => e.Id == reporterId);
         if (reporter is null)
             return BadRequest("Odabrani prijavitelj ne postoji.");
 
@@ -338,7 +344,7 @@ public class FaultReportsController : ControllerBase
         _db.FaultReports.Add(entity);
         await _db.SaveChangesAsync();
 
-        EventLogger.Log(_db, entity.Id, "Otvaranje prijave", null, received.Name);
+        EventLogger.Log(_db, User, entity.Id, "Otvaranje prijave", null, received.Name);
         await _db.SaveChangesAsync();
 
         return CreatedAtAction(nameof(GetById), new { id = entity.Id }, null);
@@ -379,6 +385,7 @@ public class FaultReportsController : ControllerBase
     {
         var entity = await _db.FaultReports
             .Include(x => x.Status)
+            .Include(x => x.Priority)
             .FirstOrDefaultAsync(x => x.Id == id);
 
         if (entity is null)
@@ -413,14 +420,14 @@ public class FaultReportsController : ControllerBase
             var reviewed = await _db.FaultStatuses
                 .FirstAsync(s => s.Code == FaultStatusCodes.Reviewed);
 
+            EventLogger.Log(_db, User, entity.Id, "Promjena statusa",
+                entity.Status.Name, reviewed.Name);
+
             entity.StatusId = reviewed.Id;
             entity.ReviewedAt = DateTime.UtcNow;
-
-            EventLogger.Log(_db, entity.Id, "Promjena statusa",
-                entity.Status.Name, reviewed.Name);
         }
 
-        EventLogger.Log(_db, entity.Id, "Promjena prioriteta", oldPriority, priority.Name);
+        EventLogger.Log(_db, User, entity.Id, "Promjena prioriteta", oldPriority, priority.Name);
 
         await _db.SaveChangesAsync();
         return NoContent();
@@ -458,7 +465,7 @@ public class FaultReportsController : ControllerBase
         var closed = await _db.FaultStatuses
             .FirstAsync(s => s.Code == FaultStatusCodes.Closed);
 
-        EventLogger.Log(_db, entity.Id, "Promjena statusa", entity.Status.Name, closed.Name);
+        EventLogger.Log(_db, User, entity.Id, "Promjena statusa", entity.Status.Name, closed.Name);
 
         entity.StatusId = closed.Id;
         entity.ClosedAt = DateTime.UtcNow;

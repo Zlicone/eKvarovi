@@ -119,4 +119,6 @@ public class FaultReportEventDto
     public string? OldValue { get; set; }
     public string? NewValue { get; set; }
     public DateTime ChangedAt { get; set; }
+    public string? ChangedByName { get; set; }
+    public string? ChangedByUsername { get; set; }
 }

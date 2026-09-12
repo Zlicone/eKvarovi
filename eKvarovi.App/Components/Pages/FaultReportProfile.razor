@@ -245,17 +245,22 @@ else
                     <MudTimeline TimelinePosition="TimelinePosition.Start">
                         @foreach (var ev in _events)
                         {
-                            <MudTimelineItem Size="Size.Small" Color="Color.Primary">
+                            <MudTimelineItem Size="Size.Small" Color="@EventColor(ev.EventType)">
                                 <MudText Typo="Typo.body2"><b>@ev.EventType</b></MudText>
+
                                 @if (ev.OldValue is not null || ev.NewValue is not null)
                                 {
-                                    <MudText Typo="Typo.caption">
+                                    <MudText Typo="Typo.caption" Class="d-block">
                                         @(ev.OldValue ?? "—") → @(ev.NewValue ?? "—")
                                     </MudText>
                                 }
-                                <br />
-                                <MudText Typo="Typo.caption">
+
+                                <MudText Typo="Typo.caption" Class="d-block">
                                     @ev.ChangedAt.ToLocalTime().ToString("dd.MM.yyyy. HH:mm")
+                                </MudText>
+
+                                <MudText Typo="Typo.caption" Class="d-block">
+                                    @EventAuthor(ev)
                                 </MudText>
                             </MudTimelineItem>
                         }
@@ -446,4 +451,28 @@ else
             await Reload();
         }
     }
+
+    private static string EventAuthor(FaultReportEventDto ev)
+    {
+        if (!string.IsNullOrWhiteSpace(ev.ChangedByName))
+            return ev.ChangedByName;
+
+        if (!string.IsNullOrWhiteSpace(ev.ChangedByUsername))
+            return ev.ChangedByUsername;
+
+        return "sustav";
+    }
+
+    private static Color EventColor(string eventType) => eventType switch
+    {
+        "Otvaranje prijave" => Color.Info,
+        "Promjena statusa" => Color.Primary,
+        "Promjena prioriteta" => Color.Warning,
+        "Dodjela naloga" => Color.Success,
+        "Ponovna dodjela" => Color.Warning,
+        "Skidanje naloga" => Color.Error,
+        "Otvorena intervencija" => Color.Info,
+        "Status intervencije" => Color.Primary,
+        _ => Color.Default
+    };
 }

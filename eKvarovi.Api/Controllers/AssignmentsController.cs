@@ -112,12 +112,12 @@ public class AssignmentsController : ControllerBase
                 .Select(e => e.FirstName + " " + e.LastName)
                 .FirstAsync();
 
-            EventLogger.Log(_db, report.Id, "Ponovna dodjela",
+            EventLogger.Log(_db, User, report.Id, "Ponovna dodjela",
                 previous, technician.FirstName + " " + technician.LastName);
         }
         else
         {
-            EventLogger.Log(_db, report.Id, "Dodjela naloga",
+            EventLogger.Log(_db, User, report.Id, "Dodjela naloga",
                 null, technician.FirstName + " " + technician.LastName);
         }
 
@@ -135,7 +135,7 @@ public class AssignmentsController : ControllerBase
             var assigned = await _db.FaultStatuses
                 .FirstAsync(s => s.Code == FaultStatusCodes.Assigned);
 
-            EventLogger.Log(_db, report.Id, "Promjena statusa",
+            EventLogger.Log(_db, User, report.Id, "Promjena statusa",
                 report.Status.Name, assigned.Name);
 
             report.StatusId = assigned.Id;
@@ -172,7 +172,7 @@ public class AssignmentsController : ControllerBase
 
         assignment.UnassignedAt = DateTime.UtcNow;
 
-        EventLogger.Log(_db, assignment.FaultReportId, "Skidanje naloga",
+        EventLogger.Log(_db, User, assignment.FaultReportId, "Skidanje naloga",
             assignment.Technician!.FirstName + " " + assignment.Technician!.LastName, null);
 
         var report = assignment.FaultReport!;
@@ -182,7 +182,7 @@ public class AssignmentsController : ControllerBase
             var reviewed = await _db.FaultStatuses
                 .FirstAsync(s => s.Code == FaultStatusCodes.Reviewed);
 
-            EventLogger.Log(_db, report.Id, "Promjena statusa",
+            EventLogger.Log(_db, User, report.Id, "Promjena statusa",
                 report.Status.Name, reviewed.Name);
 
             report.StatusId = reviewed.Id;

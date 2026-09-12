@@ -1,4 +1,6 @@
-﻿using eKvarovi.Api.Models;
+﻿using System.Security.Claims;
+using eKvarovi.Api.Models;
+using eKvarovi.Api.Services;
 
 namespace eKvarovi.Api.Data;
 
@@ -21,5 +23,16 @@ public static class EventLogger
             ChangedByAppUserId = appUserId,
             ChangedAt = DateTime.UtcNow
         });
+    }
+
+    public static void Log(
+        EKvaroviDbContext db,
+        ClaimsPrincipal user,
+        int faultReportId,
+        string eventType,
+        string? oldValue = null,
+        string? newValue = null)
+    {
+        Log(db, faultReportId, eventType, oldValue, newValue, user.GetUserId());
     }
 }

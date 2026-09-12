@@ -163,7 +163,7 @@ public class InterventionsController : ControllerBase
 
         _db.Interventions.Add(entity);
 
-        EventLogger.Log(_db, assignment.FaultReportId, "Otvorena intervencija", null, planned.Name);
+        EventLogger.Log(_db, User, assignment.FaultReportId, "Otvorena intervencija", null, planned.Name);
 
         await _db.SaveChangesAsync();
 
@@ -229,7 +229,7 @@ public class InterventionsController : ControllerBase
             ? (int)(dto.FinishedAt.Value - dto.StartedAt.Value).TotalMinutes
             : null;
 
-        EventLogger.Log(_db, report.Id, "Status intervencije", oldStatusName, newStatus.Name);
+        EventLogger.Log(_db, User, report.Id, "Status intervencije", oldStatusName, newStatus.Name);
 
         if (newStatus.Code == InterventionStatusCodes.InProgress &&
             report.Status!.Code == FaultStatusCodes.Assigned)
@@ -237,7 +237,7 @@ public class InterventionsController : ControllerBase
             var inProgress = await _db.FaultStatuses
                 .FirstAsync(s => s.Code == FaultStatusCodes.InProgress);
 
-            EventLogger.Log(_db, report.Id, "Promjena statusa", report.Status.Name, inProgress.Name);
+            EventLogger.Log(_db, User, report.Id, "Promjena statusa", report.Status.Name, inProgress.Name);
             report.StatusId = inProgress.Id;
         }
 
@@ -247,7 +247,7 @@ public class InterventionsController : ControllerBase
             var resolved = await _db.FaultStatuses
                 .FirstAsync(s => s.Code == FaultStatusCodes.Resolved);
 
-            EventLogger.Log(_db, report.Id, "Promjena statusa", report.Status.Name, resolved.Name);
+            EventLogger.Log(_db, User, report.Id, "Promjena statusa", report.Status.Name, resolved.Name);
             report.StatusId = resolved.Id;
             report.ResolvedAt = DateTime.UtcNow;
         }
