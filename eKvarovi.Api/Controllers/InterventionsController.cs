@@ -133,6 +133,12 @@ public class InterventionsController : ControllerBase
         if (assignment.UnassignedAt is not null)
             return BadRequest("Intervenciju nije moguće otvoriti na zatvorenom radnom nalogu.");
 
+        var employeeId = User.GetEmployeeId();
+        var isManager = User.IsInAnyRole(RoleNames.Admin, RoleNames.Manager);
+
+        if (!isManager && assignment.TechnicianId != employeeId)
+            return Forbid();
+
         if (assignment.FaultReport!.Status!.Code == FaultStatusCodes.Closed)
             return BadRequest("Prijava je zatvorena.");
 

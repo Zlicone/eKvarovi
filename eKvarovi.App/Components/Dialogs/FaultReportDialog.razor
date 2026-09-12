@@ -76,17 +76,18 @@
 
     private bool IsEdit => Existing is not null;
 
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
-        if (Existing is not null)
+        if (Existing is null) return;
+
+        var detail = await FaultReportService.GetDetailAsync(Existing.Id);
+
+        _model = new FaultReportUpdateDto
         {
-            _model = new FaultReportUpdateDto
-            {
-                Title = Existing.Title,
-                LocationId = Existing.LocationId,
-                Description = string.Empty
-            };
-        }
+            Title = detail?.Title ?? Existing.Title,
+            Description = detail?.Description ?? string.Empty,
+            LocationId = detail?.LocationId ?? Existing.LocationId
+        };
     }
 
     private async Task Save()

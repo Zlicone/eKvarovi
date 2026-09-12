@@ -1,5 +1,6 @@
 ﻿using eKvarovi.Api.Data;
 using eKvarovi.Api.Models;
+using eKvarovi.Api.Services;
 using eKvarovi.Shared.Dtos;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -124,7 +125,7 @@ public class AssignmentsController : ControllerBase
         {
             FaultReportId = dto.FaultReportId,
             TechnicianId = dto.TechnicianId,
-            AssignedByEmployeeId = dto.AssignedByEmployeeId,
+            AssignedByEmployeeId = User.GetEmployeeId(),
             AssignedAt = now,
             Note = string.IsNullOrWhiteSpace(dto.Note) ? null : dto.Note.Trim()
         });

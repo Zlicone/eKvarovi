@@ -1,5 +1,6 @@
 ﻿using eKvarovi.Api.Data;
 using eKvarovi.Api.Models;
+using eKvarovi.Api.Services;
 using eKvarovi.Shared.Dtos;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -139,7 +140,8 @@ public class AttachmentsController : ControllerBase
             StoredFileName = storedName,
             ContentType = file.ContentType,
             SizeBytes = file.Length,
-            UploadedAt = DateTime.UtcNow
+            UploadedAt = DateTime.UtcNow,
+            UploadedByAppUserId = User.GetUserId()
         });
 
         await _db.SaveChangesAsync();
