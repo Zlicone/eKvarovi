@@ -25,8 +25,7 @@ intervencije i utrošeni materijal, a upravitelj na kraju zatvara prijavu.
 eKvarovi/
 ├── eKvarovi.App/          Blazor klijent — stranice, dijalozi, servisi
 ├── eKvarovi.Api/          Web API — kontroleri, EF Core model, migracije, seed
-├── eKvarovi.Shared/       DTO-ovi koje dijele klijent i API
-└── eKvarovi.Api.http      Primjeri HTTP zahtjeva za testiranje
+└── eKvarovi.Shared/       DTO-ovi koje dijele klijent i API
 ```
 
 Entity modeli žive isključivo u `eKvarovi.Api/Models` i nikad ne izlaze iz API
@@ -247,10 +246,6 @@ prijavitelj ih ne određuje.
 ## Testiranje API-ja
 
 Swagger je dostupan na `https://localhost:7110/swagger`.
-
-Za zaštićene endpointe koristiti datoteku `eKvarovi.Api.http` u Visual Studiju:
-pokrenuti zahtjev za prijavu, kopirati token u varijablu `@token`, pa pozivati
-ostale zahtjeve.
 
 ---
 
