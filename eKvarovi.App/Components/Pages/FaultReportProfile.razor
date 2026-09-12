@@ -133,9 +133,13 @@ else
                 }
             </MudPaper>
             <div class="mt-4">
+                <BeforeAfterPanel FaultReportId="@_report.Id" @key="_attachmentVersion" />
+            </div>
+
+            <div class="mt-4">
                 <AttachmentPanel FaultReportId="@_report.Id"
-                                 ReadOnly="@(_report.StatusCode == "ZATVORENO")"
-                                 OnChanged="Reload" />
+                                 ReadOnly="@IsClosed"
+                                 OnChanged="OnAttachmentsChanged" />
             </div>
         </MudItem>
 
@@ -284,6 +288,7 @@ else
     private List<LookupDto> _priorities = new();
 
     private bool _loading = true;
+    private bool IsClosed => _report?.StatusCode == "ZATVORENO";
 
     private string? _lastNote => _interventions
         .OrderByDescending(i => i.CreatedAt)
@@ -475,4 +480,12 @@ else
         "Status intervencije" => Color.Primary,
         _ => Color.Default
     };
+
+    private int _attachmentVersion;
+
+    private async Task OnAttachmentsChanged()
+    {
+        _attachmentVersion++;
+        await Reload();
+    }
 }

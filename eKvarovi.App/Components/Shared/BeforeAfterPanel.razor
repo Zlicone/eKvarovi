@@ -1,0 +1,186 @@
+﻿@using eKvarovi.Shared.Dtos
+@using eKvarovi.App.Services
+@inject AttachmentService AttachmentService
+
+@if (_before.Count > 0 || _after.Count > 0)
+{
+    <MudPaper Class="pa-4">
+        <div class="d-flex justify-space-between align-center mb-3">
+            <MudText Typo="Typo.h6">Usporedba prije i nakon popravka</MudText>
+
+            <MudToggleGroup T="string" Value="_mode" ValueChanged="OnModeChanged"
+                            Size="Size.Small" Color="Color.Primary">
+                <MudToggleItem T="string" Value="@("side")" Text="Jedno uz drugo" />
+                <MudToggleItem T="string" Value="@("slider")" Text="Klizač" />
+            </MudToggleGroup>
+        </div>
+
+        @if (_before.Count == 0 || _after.Count == 0)
+        {
+            <MudAlert Severity="Severity.Info" Dense="true" Class="mb-3">
+                @(_before.Count == 0
+                    ? "Nedostaje fotografija snimljena prije zahvata."
+                    : "Nedostaje fotografija snimljena nakon zahvata.")
+                Usporedba će biti dostupna kad postoje obje.
+            </MudAlert>
+        }
+
+        @if (_before.Count > 1 || _after.Count > 1)
+        {
+            <MudGrid Class="mb-3">
+                @if (_before.Count > 1)
+                {
+                    <MudItem xs="12" sm="6">
+                        <MudSelect T="int" Value="_beforeIndex" ValueChanged="OnBeforeChanged"
+                                   Label="Fotografija prije" Dense="true">
+                            @for (var i = 0; i < _before.Count; i++)
+                            {
+                                var index = i;
+                                <MudSelectItem T="int" Value="@index">
+                                    @_before[index].OriginalFileName
+                                </MudSelectItem>
+                            }
+                        </MudSelect>
+                    </MudItem>
+                }
+
+                @if (_after.Count > 1)
+                {
+                    <MudItem xs="12" sm="6">
+                        <MudSelect T="int" Value="_afterIndex" ValueChanged="OnAfterChanged"
+                                   Label="Fotografija nakon" Dense="true">
+                            @for (var i = 0; i < _after.Count; i++)
+                            {
+                                var index = i;
+                                <MudSelectItem T="int" Value="@index">
+                                    @_after[index].OriginalFileName
+                                </MudSelectItem>
+                            }
+                        </MudSelect>
+                    </MudItem>
+                }
+            </MudGrid>
+        }
+
+        @if (_mode == "side")
+        {
+            <MudGrid>
+                <MudItem xs="12" md="6">
+                    <MudText Typo="Typo.subtitle2" Class="mb-2">Prije</MudText>
+                    @if (CurrentBefore is null)
+                    {
+                        <div class="d-flex justify-center align-center"
+                             style="height: 300px; background: var(--mud-palette-background-grey); border-radius: 4px;">
+                            <MudText Typo="Typo.caption">Nema fotografije</MudText>
+                        </div>
+                    }
+                    else
+                    {
+                        <img src="@Url(CurrentBefore)" alt="Prije popravka"
+                             style="width: 100%; height: 300px; object-fit: cover; border-radius: 4px;" />
+                        <MudText Typo="Typo.caption">
+                            @CurrentBefore.UploadedAt.ToLocalTime().ToString("dd.MM.yyyy. HH:mm")
+                        </MudText>
+                    }
+                </MudItem>
+
+                <MudItem xs="12" md="6">
+                    <MudText Typo="Typo.subtitle2" Class="mb-2">Nakon</MudText>
+                    @if (CurrentAfter is null)
+                    {
+                        <div class="d-flex justify-center align-center"
+                             style="height: 300px; background: var(--mud-palette-background-grey); border-radius: 4px;">
+                            <MudText Typo="Typo.caption">Nema fotografije</MudText>
+                        </div>
+                    }
+                    else
+                    {
+                        <img src="@Url(CurrentAfter)" alt="Nakon popravka"
+                             style="width: 100%; height: 300px; object-fit: cover; border-radius: 4px;" />
+                        <MudText Typo="Typo.caption">
+                            @CurrentAfter.UploadedAt.ToLocalTime().ToString("dd.MM.yyyy. HH:mm")
+                        </MudText>
+                    }
+                </MudItem>
+            </MudGrid>
+        }
+        else if (CurrentBefore is not null && CurrentAfter is not null)
+        {
+            <div style="position: relative; width: 100%; height: 400px; overflow: hidden; border-radius: 4px;">
+                <img src="@Url(CurrentAfter)" alt="Nakon popravka"
+                     style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover;" />
+
+                <div style="@($"position: absolute; top: 0; left: 0; height: 100%; width: {_split}%; overflow: hidden;")">
+                    <img src="@Url(CurrentBefore)" alt="Prije popravka"
+                         style="height: 100%; object-fit: cover;
+                    width: @(_split > 0 ? $"{100.0 / _split * 100}%" : "100%");
+                    max-width: none;" />
+                </div>
+
+                <div style="@($"position: absolute; top: 0; left: {_split}%; width: 3px; height: 100%; background: white; box-shadow: 0 0 4px rgba(0,0,0,0.5);")"></div>
+
+                <MudChip T="string" Size="Size.Small" Color="Color.Dark"
+                         Style="position: absolute; top: 8px; left: 8px;">
+                    Prije
+                </MudChip>
+                <MudChip T="string" Size="Size.Small" Color="Color.Dark"
+                         Style="position: absolute; top: 8px; right: 8px;">
+                    Nakon
+                </MudChip>
+            </div>
+
+            <MudSlider T="int" Value="_split" ValueChanged="OnSplitChanged"
+                       Min="0" Max="100" Step="1" Class="mt-2" />
+            <MudText Typo="Typo.caption">Povucite klizač za usporedbu.</MudText>
+        }
+        else
+        {
+            <MudAlert Severity="Severity.Warning" Dense="true">
+                Za prikaz klizačem potrebne su obje fotografije.
+            </MudAlert>
+        }
+    </MudPaper>
+}
+
+@code {
+    [Parameter] public int FaultReportId { get; set; }
+
+    private List<AttachmentDto> _before = new();
+    private List<AttachmentDto> _after = new();
+
+    private int _beforeIndex;
+    private int _afterIndex;
+    private int _split = 50;
+    private string _mode = "side";
+
+    private AttachmentDto? CurrentBefore =>
+        _before.Count > _beforeIndex ? _before[_beforeIndex] : null;
+
+    private AttachmentDto? CurrentAfter =>
+        _after.Count > _afterIndex ? _after[_afterIndex] : null;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var all = await AttachmentService.GetAllAsync(faultReportId: FaultReportId);
+
+        _before = all
+            .Where(a => a.PurposeCode == "FOTO_PRIJE" && a.IsImage)
+            .OrderBy(a => a.UploadedAt)
+            .ToList();
+
+        _after = all
+            .Where(a => a.PurposeCode == "FOTO_NAKON" && a.IsImage)
+            .OrderBy(a => a.UploadedAt)
+            .ToList();
+
+        if (_beforeIndex >= _before.Count) _beforeIndex = 0;
+        if (_afterIndex >= _after.Count) _afterIndex = 0;
+    }
+
+    private string Url(AttachmentDto att) => $"{AttachmentService.BaseUrl}{att.Url}";
+
+    private void OnModeChanged(string value) => _mode = value;
+    private void OnBeforeChanged(int value) => _beforeIndex = value;
+    private void OnAfterChanged(int value) => _afterIndex = value;
+    private void OnSplitChanged(int value) => _split = value;
+}
